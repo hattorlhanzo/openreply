@@ -51,12 +51,26 @@ export function renderMessageWithoutLink({
     .trim();
 }
 
+/**
+ * Where a tracked link points.
+ *
+ * This is the one URL that *subscribers* open, so it is deliberately separate
+ * from NEXTAUTH_URL, which is the operator's way into the dashboard. The two
+ * audiences can need different hostnames — an operator whose ISP blocks the
+ * public entry point still has to reach the panel, and moving the public links
+ * to follow them silently breaks every button already sent.
+ *
+ * PUBLIC_LINK_URL wins when set; otherwise it falls back to NEXTAUTH_URL, which
+ * is correct for the common case where one hostname serves everyone.
+ */
 export function buildTrackedUrl(slug: string, baseUrl?: string) {
   const resolvedBaseUrl =
     baseUrl ??
     (typeof window !== "undefined"
       ? window.location.origin
-      : process.env.NEXTAUTH_URL ?? "http://localhost:3000");
+      : process.env.PUBLIC_LINK_URL ??
+        process.env.NEXTAUTH_URL ??
+        "http://localhost:3000");
 
   return `${resolvedBaseUrl.replace(/\/$/, "")}/r/${slug}`;
 }

@@ -1,0 +1,103 @@
+# OpenReply — production stack for a single VPS (Beget or any root-access box).
+#
+#   cd deploy && docker compose -f docker-compose.prod.yml up -d --build
+#
+# Postgres and Redis are NOT published to the host: they are reachable only on
+# the compose network. The web app is published on 127.0.0.1 for the cron jobs
+# only; public traffic arrives through the existing Caddy container, which
+# reaches `web` over the shared `edge` network under the alias openreply-web.
+
+name: openreply
+
+x-app: &app
+  image: openreply:latest
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openreply
+      POSTGRES_USER: openreply
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing from deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreply -d openreply"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly keeps the BullMQ queue across a restart; without it a reboot
+    # silently drops every DM still waiting to send.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Runs `prisma migrate deploy` once, then exits. web and worker wait for it.
+  migrate:
+    <<: *app
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+
+  web:
+    <<: *app
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Creates campaigns from Telegram so the dashboard is not needed for the
+  # common case. Talks to `web` over the compose network with BOT_API_KEY.
+  bot:
+    <<: *app
+    command: ["npx", "tsx", "bot/telegram-bot.ts"]
+    environment:
+      APP_INTERNAL_URL: http://web:3000
+    depends_on:
+      web:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ["npm", "run", "worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  redisdata:

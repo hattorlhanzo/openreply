@@ -43,3 +43,7 @@ next-env.d.ts
 
 /app/generated/prisma
 .gstack/
+
+# Per-client secrets and the shared Postgres password
+deploy/multi/clients/
+deploy/multi/.env.shared

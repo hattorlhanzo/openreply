@@ -1,0 +1,37 @@
+# Shared Postgres for every client instance.
+#
+#   docker compose -p openreply-shared -f docker-compose.shared.yml up -d
+#
+# One server, one database per client, one role per client — provision.sh
+# creates them. Postgres costs ~45 MB no matter how many clients it holds, so
+# splitting it per client would waste memory for nothing.
+#
+# Redis is deliberately NOT here. It is ~8 MB per client, and giving each its
+# own removes both the 16-database ceiling and any chance of two clients'
+# BullMQ queues colliding.
+
+name: openreply-shared
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPER_PASSWORD:?set POSTGRES_SUPER_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [shared]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  pgdata:
+
+networks:
+  shared:
+    name: openreply-shared

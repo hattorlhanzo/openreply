@@ -10,6 +10,7 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import { resolveWorkspaceContext, resolveWorkspaceId } from "@/lib/bot-auth";
 
 // This list is read-your-writes (created/imported campaigns must show up
 // immediately), so never cache it at the route or CDN layer.
@@ -122,7 +123,8 @@ const updateAutomationSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const workspaceId = await getCurrentWorkspaceId();
+  // Session cookie for the dashboard, BOT_API_KEY for the Telegram bot.
+  const workspaceId = await resolveWorkspaceId(request);
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
@@ -276,7 +278,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const context = await getCurrentWorkspaceContext();
+  // Session cookie for the dashboard, BOT_API_KEY for the Telegram bot.
+  const context = await resolveWorkspaceContext(request);
   if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
@@ -446,7 +449,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const context = await getCurrentWorkspaceContext();
+  const context = await resolveWorkspaceContext(request);
   if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
@@ -608,7 +611,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const context = await getCurrentWorkspaceContext();
+  const context = await resolveWorkspaceContext(request);
   if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },

@@ -132,3 +132,49 @@ describe("matchKeywords — edge cases", () => {
     expect(result.matched).toBe(true);
   });
 });
+
+describe("matchKeywords — non-Latin alphabets", () => {
+  it("should keep Cyrillic through the cleaner", () => {
+    expect(stripSpecialCharacters("хочу тест!")).toBe("хочу тест");
+  });
+
+  it("should match a Cyrillic keyword", () => {
+    const result = matchKeywords("хочу тест пожалуйста", ["тест"], true);
+    expect(result.matched).toBe(true);
+    expect(result.matchedKeyword).toBe("тест");
+  });
+
+  it("should respect word boundaries in Cyrillic", () => {
+    // \b cannot see Cyrillic boundaries, so this is the case that regressed.
+    expect(matchKeywords("тестирование", ["тест"], true).matched).toBe(false);
+    expect(matchKeywords("тестирование", ["тест"], false).matched).toBe(true);
+  });
+
+  it("should be case-insensitive for Cyrillic", () => {
+    expect(matchKeywords("ЦЕНА пожалуйста", ["цена"], true).matched).toBe(true);
+  });
+});
+
+describe("matchKeywords — plus sign trigger", () => {
+  it("should keep a plus through the cleaner", () => {
+    expect(stripSpecialCharacters("+")).toBe("+");
+    expect(stripSpecialCharacters("➕")).toBe("+");
+  });
+
+  it("should match a bare plus comment", () => {
+    expect(matchKeywords("+", ["+"], true).matched).toBe(true);
+  });
+
+  it("should match the heavy plus emoji against a plain plus keyword", () => {
+    expect(matchKeywords("➕", ["+"], true).matched).toBe(true);
+  });
+
+  it("should match a plus inside a longer comment", () => {
+    expect(matchKeywords("хочу + пожалуйста", ["+"], true).matched).toBe(true);
+    expect(matchKeywords("+++", ["+"], true).matched).toBe(true);
+  });
+
+  it("should not match a comment without a plus", () => {
+    expect(matchKeywords("хочу цену", ["+"], true).matched).toBe(false);
+  });
+});

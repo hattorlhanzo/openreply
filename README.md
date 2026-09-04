@@ -10,6 +10,10 @@ Open-sourced ManyChat for Instagram comment-to-DM automation.
 
 </div>
 
+> **This is a fork.** Single-VPS deployment and a Telegram bot have been added —
+> see [FORK.md](FORK.md) for what changed and why.
+
+
 Someone comments `LINK` on your reel, and they get a DM with your link a second later. That is the whole idea. OpenReply watches the comments on your Instagram posts, and when a comment matches a keyword you set, it sends that person a private reply through the official Meta API. You can also post a public reply under the comment at the same time.
 
 ManyChat does this and charges a monthly fee. OpenReply is the same core feature, free, running on your own infrastructure, with no seat limits and no plan caps.

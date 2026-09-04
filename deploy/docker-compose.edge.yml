@@ -1,0 +1,25 @@
+# Override for the case where another project's reverse proxy already owns
+# ports 80/443 and OpenReply must be reachable from that proxy's container.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.edge.yml up -d
+#
+# Set EDGE_NETWORK to the existing network's name (e.g. fastbots_default). The
+# proxy then reaches the app at http://openreply-web:3000.
+#
+# Not needed when this stack owns the box — the plain prod file plus nginx from
+# bootstrap.sh covers that, and it is the simpler setup.
+
+services:
+  web:
+    networks:
+      default:
+      edge:
+        aliases:
+          - openreply-web
+
+networks:
+  # Declared external so compose joins it instead of creating it — compose must
+  # never own or remove a network another running project depends on.
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:?set EDGE_NETWORK to the existing proxy network}

@@ -1,0 +1,81 @@
+# One client instance: web + worker + bot + its own Redis.
+#
+#   docker compose -p openreply-$CLIENT \
+#     -f docker-compose.client.yml --env-file clients/$CLIENT/.env up -d
+#
+# provision.sh writes the env file and calls this. Postgres comes from the
+# shared stack over the external `openreply-shared` network.
+
+x-app: &app
+  image: openreply:latest
+  build:
+    context: ../..
+    dockerfile: deploy/Dockerfile
+  env_file: ${CLIENT_ENV_FILE:?set CLIENT_ENV_FILE}
+  restart: unless-stopped
+  networks: [default, shared]
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    <<: *app
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+
+  web:
+    <<: *app
+    # Bound to localhost; nginx on the host is the only way in.
+    ports:
+      - "127.0.0.1:${CLIENT_PORT:?set CLIENT_PORT}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  worker:
+    <<: *app
+    command: ["npm", "run", "worker"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  bot:
+    <<: *app
+    command: ["npx", "tsx", "bot/telegram-bot.ts"]
+    environment:
+      APP_INTERNAL_URL: http://web:3000
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  redisdata:
+
+networks:
+  default:
+  shared:
+    external: true
+    name: openreply-shared

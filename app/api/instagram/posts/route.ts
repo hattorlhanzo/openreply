@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentWorkspaceId } from "@/lib/auth";
+import { resolveWorkspaceId } from "@/lib/bot-auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getAllUserMedia, getUserMedia } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 
 export async function GET(request: NextRequest) {
-  const workspaceId = await getCurrentWorkspaceId();
+  // Session cookie for the dashboard, BOT_API_KEY for the Telegram bot.
+  const workspaceId = await resolveWorkspaceId(request);
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
