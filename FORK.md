@@ -21,18 +21,18 @@ upstream changes means keeping them by hand.
 
 ## Changed
 
-**`lib/utils/keyword-matcher.ts`** — non-Latin keywords and `+` now match.
+**`lib/utils/keyword-matcher.ts`** — a bare `+` now matches.
 
-Upstream cleans comment text with `[^\w\s]`, and JavaScript's `\w` without the
-Unicode flag means `[A-Za-z0-9_]`. Every Cyrillic character was treated as
-punctuation and stripped, so both the keyword and the comment collapsed to an
-empty string and nothing ever fired. The same applied to a bare `+` — one of the
-most common triggers there is ("put a + in the comments").
+Upstream has since fixed the Unicode side of this independently, and gone
+further: diacritic folding and Arabic-script normalisation. That work is kept as
+the base here. What it does not cover is a keyword made only of symbols — and
+"put a + in the comments" is one of the most common triggers there is. The
+cleaner strips `+` as punctuation, and whole-word matching has no boundary to
+anchor it to.
 
-The fix moves the cleaner to Unicode classes (`\p{L}`, `\p{N}`), folds `➕` onto
-`+` before emoji are stripped, and replaces `\b` — which cannot see a Cyrillic
-word boundary — with lookarounds. A symbol-only keyword falls back to substring
-matching, since `+` has no word boundary to anchor to. Covered by tests.
+This fork folds `➕` onto `+` before emoji are stripped, keeps `+` as a
+meaningful character, and falls back to substring matching for a symbol-only
+keyword. Covered by tests.
 
 **`lib/tracking/message.ts`** — tracked links read `PUBLIC_LINK_URL`, falling
 back to `NEXTAUTH_URL`.
