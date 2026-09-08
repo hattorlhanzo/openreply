@@ -26,6 +26,10 @@ services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    # Published to loopback only, so the host-networked bot can reach it. Not
+    # exposed beyond 127.0.0.1 — nothing outside this machine may touch it.
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: openreply
       POSTGRES_USER: openreply
@@ -41,6 +45,9 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Loopback only, same reason as postgres above.
+    ports:
+      - "127.0.0.1:6379:6379"
     # appendonly keeps the BullMQ queue across a restart; without it a reboot
     # silently drops every DM still waiting to send.
     command: ["redis-server", "--appendonly", "yes"]
@@ -61,7 +68,10 @@ services:
   web:
     <<: *app
     ports:
-      - "127.0.0.1:3000:3000"
+      # 3100, not 3000: this box also runs an unrelated Next.js app (the CRM)
+      # already bound to 3000. Publishing there would fail to bind — and worse,
+      # deploy/cron.sh would silently drive the wrong application.
+      - "127.0.0.1:3100:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,8 +96,24 @@ services:
   bot:
     <<: *app
     command: ["npx", "tsx", "bot/telegram-bot.ts"]
+    # Host networking, not the compose network. On this box api.telegram.org is
+    # unreachable from inside containers — every connection times out — while
+    # the host itself reaches it fine, and Instagram, Resend and the rest work
+    # from containers normally. Whatever the cause, the bot only makes outbound
+    # calls plus one call into the app, so sharing the host's stack sidesteps
+    # it. That also means `web` is no longer resolvable by name: reach it on
+    # the port it publishes to loopback instead.
+    network_mode: host
+    # On the host network the compose service names stop resolving, and the bot
+    # reaches Postgres and Redis directly (bot/monitor.ts uses Prisma and reads
+    # the worker heartbeat). Mapping the names to loopback keeps DATABASE_URL
+    # and REDIS_URL in .env working untouched, which matters: those values are
+    # shared with web and worker and must not drift apart.
+    extra_hosts:
+      - "postgres:127.0.0.1"
+      - "redis:127.0.0.1"
     environment:
-      APP_INTERNAL_URL: http://web:3000
+      APP_INTERNAL_URL: http://127.0.0.1:3100
     depends_on:
       web:
         condition: service_healthy

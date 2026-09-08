@@ -19,5 +19,5 @@ SECRET="$(grep -E '^CRON_SECRET=' "$DIR/.env" | head -1 | cut -d= -f2- | tr -d '
 
 curl -fsS --max-time 300 \
      -H "Authorization: Bearer ${SECRET}" \
-     "http://127.0.0.1:3000/api/cron/${JOB}"
+     "http://127.0.0.1:3100/api/cron/${JOB}"
 echo
