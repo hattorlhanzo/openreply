@@ -47,3 +47,6 @@ next-env.d.ts
 # Per-client secrets and the shared Postgres password
 deploy/multi/clients/
 deploy/multi/.env.shared
+
+# Карта инфраструктуры: реальные IP, домены и пути. Форк публичный.
+deploy/MIGRATION.md

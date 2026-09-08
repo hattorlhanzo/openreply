@@ -46,8 +46,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # NOT /api/health: it returns 503 until the worker heartbeat lands in Redis,
+    # which reports a healthy web container as unhealthy and leaves `bot` —
+    # which waits on web being healthy — permanently unstarted. /login is served
+    # by the app alone. Full /api/health remains the external check.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/login"]
       interval: 30s
       timeout: 10s
       retries: 5

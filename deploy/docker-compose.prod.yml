@@ -69,8 +69,13 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Liveness must NOT use /api/health: that endpoint returns 503 until the
+    # worker's heartbeat is in Redis, so a perfectly healthy web container is
+    # reported unhealthy — and `bot`, which waits on web being healthy, then
+    # never starts at all. /login is served by the app itself and depends on
+    # nothing else. Full /api/health stays the external check.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/login"]
       interval: 30s
       timeout: 10s
       retries: 5

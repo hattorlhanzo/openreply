@@ -95,6 +95,17 @@ INSTAGRAM_APP_SECRET=
 FACEBOOK_APP_SECRET=
 WEBHOOK_VERIFY_TOKEN=$(openssl rand -hex 16)
 
+# Polling safety net for comments Meta's webhook drops. 60s, not the 5 min
+# default: a dropped webhook otherwise shows up as a DM arriving five minutes
+# late, which reads as a broken product.
+COMMENT_POLL_INTERVAL_MS=60000
+COMMENT_POLL_MAX_PER_SWEEP=30
+COMMENT_POLL_LOOKBACK_HOURS=72
+
+# Sign-in allowlist. Until SSO exists this is the ONLY thing stopping a stranger
+# who knows the URL from requesting a magic link. Never leave it empty in prod.
+ALLOWED_EMAILS=
+
 # Telegram bot, optional. Leave the token empty to run without it.
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_ALLOWED_USER_ID=
