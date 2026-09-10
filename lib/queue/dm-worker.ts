@@ -34,9 +34,9 @@ import {
 } from "@/lib/billing/usage";
 import { recordWorkerAlert } from "@/lib/ops/worker-health";
 import {
-  buildTrackedUrl,
   renderMessageWithTracking,
   renderMessageWithoutLink,
+  resolveLinkUrl,
 } from "@/lib/tracking/message";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
@@ -86,7 +86,7 @@ function buildLinkButtons(
   primaryLabel: string | null
 ): { title: string; url: string }[] {
   return trackedLinks.slice(0, 3).map((link, index) => ({
-    url: buildTrackedUrl(link.slug),
+    url: resolveLinkUrl(link),
     title: (index === 0 ? primaryLabel : link.label) || link.label || "Open link",
   }));
 }
@@ -105,7 +105,7 @@ function buildInlineLinkFallback(
   const base =
     renderMessageWithTracking({ message, commenterName, trackedLinks }) ||
     bodyText;
-  const extraUrls = trackedLinks.slice(1).map((link) => buildTrackedUrl(link.slug));
+  const extraUrls = trackedLinks.slice(1).map((link) => resolveLinkUrl(link));
   return extraUrls.length > 0 ? `${base}\n${extraUrls.join("\n")}` : base;
 }
 

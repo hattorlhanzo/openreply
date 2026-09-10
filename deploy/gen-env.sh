@@ -56,6 +56,12 @@ WEBHOOK_VERIFY_TOKEN=$(openssl rand -hex 16)
 
 # --- Polling reconciler (defaults are fine) ---
 COMMENT_POLL_INTERVAL_MS=60000
+# Hand subscribers the destination URL directly instead of the /r/<slug>
+# redirect. The redirect is the only thing that records a click, so "true"
+# trades every click statistic — and CTR with it — for a link with no hop.
+# TrackedLink rows are still created and still resolve, so links already sent
+# keep working and switching back resumes counting.
+RAW_LINK_BUTTONS=false
 COMMENT_POLL_MAX_PER_SWEEP=30
 COMMENT_POLL_LOOKBACK_HOURS=72
 EOF

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   calculateCtr,
   normalizeTopKeywords,
@@ -9,6 +9,7 @@ import {
   extractFirstUrl,
   renderMessageWithTracking,
   replaceUrlWithTrackedPlaceholder,
+  resolveLinkUrl,
 } from "../lib/tracking/message";
 
 describe("tracked link messages", () => {
@@ -108,5 +109,55 @@ describe("campaign analytics helpers", () => {
       { keyword: "LINK", count: 7 },
       { keyword: "PRICE", count: 3 },
     ]);
+  });
+});
+
+describe("RAW_LINK_BUTTONS", () => {
+  const link = { slug: "abc123", destinationUrl: "https://zetzet.ru" };
+  const previous = process.env.RAW_LINK_BUTTONS;
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.RAW_LINK_BUTTONS;
+    else process.env.RAW_LINK_BUTTONS = previous;
+  });
+
+  it("routes through /r/<slug> by default, so clicks stay counted", () => {
+    delete process.env.RAW_LINK_BUTTONS;
+
+    expect(resolveLinkUrl(link, "https://ig.zetzet.pro")).toBe(
+      "https://ig.zetzet.pro/r/abc123"
+    );
+  });
+
+  it("hands out the destination itself when raw links are switched on", () => {
+    process.env.RAW_LINK_BUTTONS = "true";
+
+    expect(resolveLinkUrl(link, "https://ig.zetzet.pro")).toBe(
+      "https://zetzet.ru"
+    );
+  });
+
+  it("only treats the exact string \"true\" as on", () => {
+    // A half-set value must not silently disable click tracking: anything
+    // other than "true" leaves the redirect — and the statistics — in place.
+    for (const value of ["1", "yes", "TRUE", ""]) {
+      process.env.RAW_LINK_BUTTONS = value;
+      expect(resolveLinkUrl(link, "https://ig.zetzet.pro")).toBe(
+        "https://ig.zetzet.pro/r/abc123"
+      );
+    }
+  });
+
+  it("rewrites {link} in the message body to the bare destination too", () => {
+    process.env.RAW_LINK_BUTTONS = "true";
+
+    const rendered = renderMessageWithTracking({
+      message: "Hi {username}, here it is: {link}",
+      commenterName: "boris",
+      trackedLinks: [link],
+      baseUrl: "https://ig.zetzet.pro",
+    });
+
+    expect(rendered).toBe("Hi boris, here it is: https://zetzet.ru");
   });
 });

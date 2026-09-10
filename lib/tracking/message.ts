@@ -75,6 +75,36 @@ export function buildTrackedUrl(slug: string, baseUrl?: string) {
   return `${resolvedBaseUrl.replace(/\/$/, "")}/r/${slug}`;
 }
 
+/**
+ * Whether buttons and inline links carry the destination URL directly instead
+ * of the /r/<slug> redirect.
+ *
+ * The redirect is the only thing that records a LinkClick, so turning this on
+ * trades every click statistic — and with it CTR, which is how a silently
+ * broken campaign gets noticed here — for a link with no hop in it. That is a
+ * deliberate operator choice, never a default: unset, tracking behaves exactly
+ * as before.
+ *
+ * TrackedLink rows are still created and still resolve at /r/<slug>. Only the
+ * URL handed to Instagram changes, so links already sitting in sent DMs keep
+ * working and flipping this back restores counting for everything sent after.
+ */
+export function usesRawLinkUrls(): boolean {
+  return process.env.RAW_LINK_BUTTONS === "true";
+}
+
+/**
+ * The URL a subscriber should actually receive for a tracked link.
+ */
+export function resolveLinkUrl(
+  link: MessageTrackedLink,
+  baseUrl?: string
+): string {
+  return usesRawLinkUrls()
+    ? link.destinationUrl
+    : buildTrackedUrl(link.slug, baseUrl);
+}
+
 export function renderMessageWithTracking({
   message,
   commenterName,
@@ -91,7 +121,7 @@ export function renderMessageWithTracking({
 
   if (!primaryLink) return rendered;
 
-  const trackedUrl = buildTrackedUrl(primaryLink.slug, baseUrl);
+  const trackedUrl = resolveLinkUrl(primaryLink, baseUrl);
 
   if (/\{link\}/i.test(rendered)) {
     return rendered.replace(/\{link\}/gi, trackedUrl);

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getCurrentWorkspaceId } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
 import { calculateCtr, normalizeTopKeywords } from "@/lib/tracking/analytics";
-import { buildTrackedUrl } from "@/lib/tracking/message";
+import { resolveLinkUrl } from "@/lib/tracking/message";
 import { generateTrackedLinkSlug } from "@/lib/tracking/server";
 import { buildReportUrl, generateReportShareSlug } from "@/lib/reports/share";
 import {
@@ -261,7 +261,7 @@ export async function GET(request: NextRequest) {
         ...automation,
         trackedLinks: automation.trackedLinks.map((link) => ({
           ...link,
-          trackedUrl: buildTrackedUrl(link.slug),
+          trackedUrl: resolveLinkUrl(link),
         })),
         reportUrl: automation.reportShareSlug
           ? buildReportUrl(automation.reportShareSlug)
