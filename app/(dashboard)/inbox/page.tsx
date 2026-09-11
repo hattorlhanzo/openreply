@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { readCache, writeCache } from "@/lib/client-cache";
+import { API_ERRORS, NAV } from "@/lib/i18n/common";
 import type { ConversationListItem } from "@/app/api/instagram/conversations/route";
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
 
@@ -31,8 +32,8 @@ function formatTime(iso: string | null): string {
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   return sameDay
-    ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    ? d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 export default function InboxPage() {
@@ -103,10 +104,10 @@ export default function InboxPage() {
           writeCache(convCacheKey(selectedAccountId), data.data.conversations);
           setConvError(null);
         } else if (!silent) {
-          setConvError(data.error ?? "Failed to load conversations");
+          setConvError(data.error ?? API_ERRORS.failedToLoadConversations);
         }
       } catch {
-        if (!silent) setConvError("Failed to load conversations");
+        if (!silent) setConvError(API_ERRORS.failedToLoadConversations);
       } finally {
         if (!silent) setConvLoading(false);
       }
@@ -238,12 +239,12 @@ export default function InboxPage() {
         // Roll the optimistic message back and restore the draft so it's not lost.
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
         setDraft(text);
-        setSendError(data.error ?? "Failed to send message");
+        setSendError(data.error ?? API_ERRORS.failedToSendMessage);
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setDraft(text);
-      setSendError("Failed to send message");
+      setSendError(API_ERRORS.failedToSendMessage);
     } finally {
       setSending(false);
     }
@@ -259,7 +260,7 @@ export default function InboxPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
-        <h1 className="text-lg font-semibold text-foreground">Inbox</h1>
+        <h1 className="text-lg font-semibold text-foreground">{NAV.inbox}</h1>
         {accounts.length > 1 && (
           <AccountSelect
             accounts={accounts}
@@ -279,15 +280,15 @@ export default function InboxPage() {
           }`}
         >
           <div className="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
-            Conversations
+            Диалоги
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {convLoading ? (
-              <p className="px-4 py-6 text-sm text-muted">Loading…</p>
+              <p className="px-4 py-6 text-sm text-muted">Загрузка…</p>
             ) : convError ? (
               <p className="px-4 py-6 text-sm text-error">{convError}</p>
             ) : conversations.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-muted">No conversations yet.</p>
+              <p className="px-4 py-6 text-sm text-muted">Диалогов пока нет.</p>
             ) : (
               conversations.map((c) => {
                 const isActive = c.id === activeId;
@@ -302,7 +303,7 @@ export default function InboxPage() {
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-medium text-foreground">
-                        @{c.contact.username ?? "unknown"}
+                        @{c.contact.username ?? "неизвестно"}
                       </span>
                       <span className="shrink-0 text-[11px] text-zinc-500">
                         {formatTime(c.updatedTime)}
@@ -310,8 +311,8 @@ export default function InboxPage() {
                     </div>
                     {c.lastMessage && (
                       <p className="mt-0.5 truncate text-xs text-muted">
-                        {c.lastMessage.fromMe ? "You: " : ""}
-                        {c.lastMessage.text || "(no text)"}
+                        {c.lastMessage.fromMe ? "Вы: " : ""}
+                        {c.lastMessage.text || "(без текста)"}
                       </p>
                     )}
                   </button>
@@ -328,7 +329,7 @@ export default function InboxPage() {
         >
           {!active ? (
             <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted">
-              Select a conversation to read and reply.
+              Выберите диалог, чтобы прочитать и ответить.
             </div>
           ) : (
             <>
@@ -337,20 +338,20 @@ export default function InboxPage() {
                   type="button"
                   onClick={() => setActiveId(null)}
                   className="-ml-1 rounded px-2 py-1 text-muted hover:text-foreground sm:hidden"
-                  aria-label="Back to conversations"
+                  aria-label="Назад к диалогам"
                 >
-                  Back
+                  Назад
                 </button>
                 <span className="truncate">
-                  @{active.contact.username ?? "unknown"}
+                  @{active.contact.username ?? "неизвестно"}
                 </span>
               </div>
 
               <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
                 {threadLoading && messages.length === 0 ? (
-                  <p className="text-sm text-muted">Loading…</p>
+                  <p className="text-sm text-muted">Загрузка…</p>
                 ) : messages.length === 0 ? (
-                  <p className="text-sm text-muted">No messages.</p>
+                  <p className="text-sm text-muted">Сообщений нет.</p>
                 ) : (
                   messages.map((m) => (
                     <div
@@ -388,7 +389,7 @@ export default function InboxPage() {
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={handleKeyDown}
                     rows={1}
-                    placeholder="Write a reply…  (Enter to send, Shift+Enter for a new line)"
+                    placeholder="Напишите ответ…  (Enter — отправить, Shift+Enter — новая строка)"
                     className="max-h-32 min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                   />
                   <button
@@ -397,7 +398,7 @@ export default function InboxPage() {
                     disabled={sending || !draft.trim()}
                     className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
                   >
-                    {sending ? "Sending…" : "Send"}
+                    {sending ? "Отправка…" : "Отправить"}
                   </button>
                 </div>
               </div>

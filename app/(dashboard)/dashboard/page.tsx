@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * Dashboard Home Page
+ * Сводка
  *
- * Overview cards, 7-day chart, and recent activity feed.
+ * Плитки показателей, график за 7 дней и лента последних событий.
  */
 
 import { useEffect, useState } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import StatCard from "@/components/stat-card";
 import StatusBadge from "@/components/status-badge";
+import { formatDayRu, pluralRu } from "@/lib/i18n/common";
 
 interface DashboardStats {
   userName: string | null;
@@ -91,17 +92,21 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
-            Hello, {stats?.userName ?? "there"}!
+            {stats?.userName ? `Здравствуйте, ${stats.userName}!` : "Здравствуйте!"}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {connectedCount} connected{" "}
-            {connectedCount === 1 ? "account" : "accounts"}
+            {connectedCount}{" "}
+            {pluralRu(connectedCount, [
+              "подключённый аккаунт",
+              "подключённых аккаунта",
+              "подключённых аккаунтов",
+            ])}
             {" · "}
             {stats?.contactsCount ?? 0}{" "}
-            {stats?.contactsCount === 1 ? "contact" : "contacts"}
+            {pluralRu(stats?.contactsCount ?? 0, ["контакт", "контакта", "контактов"])}
             {" · "}
             <a href="/logs" className="text-accent hover:underline">
-              See activity
+              Журнал отправок
             </a>
           </p>
         </div>
@@ -117,13 +122,13 @@ export default function DashboardPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         <StatCard
-          label="Active Campaigns"
+          label="Активные кампании"
           value={stats?.activeAutomations ?? 0}
         />
-        <StatCard label="DMs Sent" value={stats?.dmsSentMonth ?? 0} />
-        <StatCard label="Skipped" value={stats?.dmsSkippedMonth ?? 0} />
-        <StatCard label="Failed" value={stats?.dmsFailedMonth ?? 0} />
-        <StatCard label="Clicks" value={stats?.clicksThisMonth ?? 0} />
+        <StatCard label="Отправлено в Direct" value={stats?.dmsSentMonth ?? 0} />
+        <StatCard label="Пропущено" value={stats?.dmsSkippedMonth ?? 0} />
+        <StatCard label="Ошибки" value={stats?.dmsFailedMonth ?? 0} />
+        <StatCard label="Переходы" value={stats?.clicksThisMonth ?? 0} />
         <StatCard label="CTR" value={`${stats?.ctrThisMonth ?? 0}%`} />
       </div>
 
@@ -131,7 +136,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 sm:gap-6">
         {/* 7-Day Chart */}
         <div className="lg:col-span-3 panel rounded p-4 sm:p-6">
-          <h2 className="text-sm font-semibold text-foreground mb-6">DMs — Last 7 Days</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-6">Сообщения в Direct — 7 дней</h2>
           <div className="flex items-end gap-1.5 h-40 sm:gap-2">
             {stats?.dailyDMs.map((day) => (
               <div key={day.date} className="min-w-0 flex-1 flex flex-col items-center gap-2">
@@ -142,7 +147,7 @@ export default function DashboardPage() {
                 />
                 {/* Seven labels share a phone's width, so they must not wrap. */}
                 <span className="w-full truncate text-center text-[10px] text-zinc-500">
-                  {day.date}
+                  {formatDayRu(day.date)}
                 </span>
               </div>
             ))}
@@ -151,10 +156,10 @@ export default function DashboardPage() {
 
         {/* Top Keywords */}
         <div className="lg:col-span-1 panel rounded p-4 sm:p-6">
-          <h2 className="text-sm font-semibold text-foreground mb-4">Top Keywords</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-4">Ключевые слова</h2>
           <div className="space-y-3">
             {stats?.topKeywords.length === 0 && (
-              <p className="text-sm text-muted py-8">No keyword matches yet</p>
+              <p className="text-sm text-muted py-8">Совпадений по ключевым словам пока нет</p>
             )}
             {stats?.topKeywords.map((keyword) => (
               <div key={keyword.keyword} className="flex items-center justify-between gap-3">
@@ -169,10 +174,10 @@ export default function DashboardPage() {
 
         {/* Recent Activity */}
         <div className="lg:col-span-2 panel rounded p-4 sm:p-6">
-          <h2 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-4">Последние события</h2>
           <div className="space-y-3 max-h-60 overflow-y-auto">
             {stats?.recentLogs.length === 0 && (
-              <p className="text-sm text-muted text-center py-8">No activity yet</p>
+              <p className="text-sm text-muted text-center py-8">Событий пока нет</p>
             )}
             {stats?.recentLogs.map((log) => (
               <div
@@ -181,7 +186,7 @@ export default function DashboardPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground truncate">
-                    @{log.commenterName ?? "unknown"}
+                    @{log.commenterName ?? "неизвестно"}
                   </p>
                   <p className="text-xs text-muted truncate">
                     {log.instagramAccount

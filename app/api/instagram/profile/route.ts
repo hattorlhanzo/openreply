@@ -3,6 +3,7 @@ import { getCurrentWorkspaceId } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getUserInfo } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
   const workspaceId = await getCurrentWorkspaceId();
   if (!workspaceId) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   );
   if (!account) {
     return NextResponse.json(
-      { success: false, error: "Instagram account not connected" },
+      { success: false, error: API_ERRORS.instagramNotConnected },
       { status: 400 }
     );
   }
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[Instagram Profile] Error:", err);
     return NextResponse.json(
-      { success: false, error: "Failed to load profile" },
+      { success: false, error: API_ERRORS.failedToLoadProfile },
       { status: 500 }
     );
   }

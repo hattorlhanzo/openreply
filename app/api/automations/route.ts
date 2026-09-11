@@ -11,6 +11,7 @@ import {
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
 import { resolveWorkspaceContext, resolveWorkspaceId } from "@/lib/bot-auth";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 // This list is read-your-writes (created/imported campaigns must show up
 // immediately), so never cache it at the route or CDN layer.
@@ -65,11 +66,11 @@ const createAutomationSchema = z
   // A campaign must target a specific post, any post, or the next reel.
   .refine(
     (d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId),
-    { message: "Choose which post(s) trigger the campaign", path: ["postId"] }
+    { message: API_ERRORS.campaignNeedsPost, path: ["postId"] }
   )
   // And it must match either specific words or any word.
   .refine((d) => d.matchAnyWord || d.keywords.length >= 1, {
-    message: "Add at least one keyword, or match any word",
+    message: API_ERRORS.campaignNeedsKeyword,
     path: ["keywords"],
   })
   // An opening DM needs both a message and a button label.
@@ -78,7 +79,7 @@ const createAutomationSchema = z
       !d.openingDmEnabled ||
       (Boolean(d.openingDmMessage?.trim()) &&
         Boolean(d.openingDmButtonLabel?.trim())),
-    { message: "Opening DM needs a message and a button label", path: ["openingDmMessage"] }
+    { message: API_ERRORS.openingDmNeedsMessageAndButton, path: ["openingDmMessage"] }
   );
 
 const updateAutomationSchema = z.object({
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
   const workspaceId = await resolveWorkspaceId(request);
   if (!workspaceId) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
@@ -282,14 +283,14 @@ export async function POST(request: NextRequest) {
   const context = await resolveWorkspaceContext(request);
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can create campaigns" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyCampaigns },
       { status: 403 }
     );
   }
@@ -303,7 +304,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Invalid input",
+        error: API_ERRORS.invalidInput,
         details: parsed.error.flatten(),
       },
       { status: 400 }
@@ -332,14 +333,14 @@ export async function POST(request: NextRequest) {
 
   if (!workspace) {
     return NextResponse.json(
-      { success: false, error: "Workspace not found" },
+      { success: false, error: API_ERRORS.workspaceNotFound },
       { status: 404 }
     );
   }
 
   if (!instagramAccount) {
     return NextResponse.json(
-      { success: false, error: "Connect Instagram before creating campaigns" },
+      { success: false, error: API_ERRORS.connectInstagramFirst },
       { status: 400 }
     );
   }
@@ -452,14 +453,14 @@ export async function PATCH(request: NextRequest) {
   const context = await resolveWorkspaceContext(request);
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can update campaigns" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyCampaigns },
       { status: 403 }
     );
   }
@@ -469,7 +470,7 @@ export async function PATCH(request: NextRequest) {
   const automationId = request.nextUrl.searchParams.get("id");
   if (!automationId) {
     return NextResponse.json(
-      { success: false, error: "Missing campaign ID" },
+      { success: false, error: API_ERRORS.missingCampaignId },
       { status: 400 }
     );
   }
@@ -481,7 +482,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Invalid input",
+        error: API_ERRORS.invalidInput,
         details: parsed.error.flatten(),
       },
       { status: 400 }
@@ -494,7 +495,7 @@ export async function PATCH(request: NextRequest) {
 
   if (!existing) {
     return NextResponse.json(
-      { success: false, error: "Campaign not found" },
+      { success: false, error: API_ERRORS.campaignNotFound },
       { status: 404 }
     );
   }
@@ -614,14 +615,14 @@ export async function DELETE(request: NextRequest) {
   const context = await resolveWorkspaceContext(request);
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can delete campaigns" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyCampaigns },
       { status: 403 }
     );
   }
@@ -631,7 +632,7 @@ export async function DELETE(request: NextRequest) {
   const automationId = request.nextUrl.searchParams.get("id");
   if (!automationId) {
     return NextResponse.json(
-      { success: false, error: "Missing campaign ID" },
+      { success: false, error: API_ERRORS.missingCampaignId },
       { status: 400 }
     );
   }
@@ -642,7 +643,7 @@ export async function DELETE(request: NextRequest) {
 
   if (!existing) {
     return NextResponse.json(
-      { success: false, error: "Campaign not found" },
+      { success: false, error: API_ERRORS.campaignNotFound },
       { status: 404 }
     );
   }

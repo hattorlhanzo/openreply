@@ -1,15 +1,18 @@
 /**
- * Status label for DM status. Plain text; color carries the state.
+ * Подпись статуса сообщения в Direct. Только текст; состояние передаёт цвет.
+ * Подписи — из DM_STATUS_LABEL, ключи — enum DmStatus в Prisma.
  */
 
-const statusConfig: Record<string, { text: string; label: string }> = {
-  SENT: { text: "text-success", label: "Sent" },
-  FAILED: { text: "text-error", label: "Failed" },
-  PENDING: { text: "text-warning", label: "Pending" },
-  SKIPPED_DEDUP: { text: "text-muted", label: "Dedup" },
-  SKIPPED_RATE_LIMIT: { text: "text-warning", label: "Rate limited" },
-  SKIPPED_PLAN_LIMIT: { text: "text-warning", label: "Skipped" },
-  SKIPPED_NO_MATCH: { text: "text-muted", label: "No match" },
+import { DM_STATUS_LABEL } from "@/lib/i18n/common";
+
+const statusColor: Record<string, string> = {
+  SENT: "text-success",
+  FAILED: "text-error",
+  PENDING: "text-warning",
+  SKIPPED_DEDUP: "text-muted",
+  SKIPPED_RATE_LIMIT: "text-warning",
+  SKIPPED_PLAN_LIMIT: "text-warning",
+  SKIPPED_NO_MATCH: "text-muted",
 };
 
 interface StatusBadgeProps {
@@ -17,11 +20,13 @@ interface StatusBadgeProps {
 }
 
 export default function StatusBadge({ status }: StatusBadgeProps) {
-  const config = statusConfig[status] ?? statusConfig.PENDING;
+  const known = status in DM_STATUS_LABEL;
+  const label = known ? DM_STATUS_LABEL[status] : DM_STATUS_LABEL.PENDING;
+  const text = known ? statusColor[status] ?? "text-muted" : statusColor.PENDING;
 
   return (
-    <span className={`shrink-0 whitespace-nowrap text-sm ${config.text}`}>
-      {config.label}
+    <span className={`shrink-0 whitespace-nowrap text-sm ${text}`}>
+      {label}
     </span>
   );
 }

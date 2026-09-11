@@ -8,6 +8,7 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 const campaignSchema = z.object({
   postId: z.string().min(1),
@@ -31,13 +32,13 @@ export async function POST(request: NextRequest) {
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can import campaigns" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyImport },
       { status: 403 }
     );
   }
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
   const parsed = importSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { success: false, error: "Invalid import data" },
+      { success: false, error: API_ERRORS.invalidImportData },
       { status: 400 }
     );
   }
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
   );
   if (!account) {
     return NextResponse.json(
-      { success: false, error: "Instagram account not found" },
+      { success: false, error: API_ERRORS.instagramAccountNotFound },
       { status: 400 }
     );
   }

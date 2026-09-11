@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Instagram Overview Page
+ * Аккаунт (обзор Instagram)
  *
  * Aggregate reach/engagement across your recent posts, plus a per-post table.
  * Views / reach / saved / shares come from Instagram media insights (requires
@@ -13,25 +13,35 @@ import AccountSelect from "@/components/account-select";
 import StatCard from "@/components/stat-card";
 import FollowerChart from "@/components/follower-chart";
 import type { OverviewResponse } from "@/app/api/instagram/overview/route";
+import {
+  formatCompactRu,
+  formatDayRu,
+  formatNumberRu,
+  pluralRu,
+} from "@/lib/i18n/common";
 
 function formatNumber(n: number | null): string {
   if (n === null) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
+  return formatCompactRu(n);
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+const formatDate = formatDayRu;
 
 const COUNT_OPTIONS = [
-  { value: "25", label: "Last 25" },
-  { value: "50", label: "Last 50" },
-  { value: "100", label: "Last 100" },
-  { value: "all", label: "All time" },
+  { value: "25", label: "Последние 25" },
+  { value: "50", label: "Последние 50" },
+  { value: "100", label: "Последние 100" },
+  { value: "all", label: "За всё время" },
 ];
+
+const MEDIA_TYPE_LABEL: Record<string, string> = {
+  IMAGE: "Фото",
+  VIDEO: "Видео",
+  CAROUSEL_ALBUM: "Карусель",
+  REELS: "Reels",
+  FEED: "Публикация",
+  STORY: "Сторис",
+};
 
 export default function OverviewPage() {
   const [data, setData] = useState<OverviewResponse | null>(null);
@@ -54,10 +64,10 @@ export default function OverviewPage() {
           setData(res.data);
           setError(null);
         } else {
-          setError(res.error ?? "Failed to load overview");
+          setError(res.error ?? "Не удалось загрузить данные аккаунта");
         }
       })
-      .catch(() => setError("Failed to load overview"))
+      .catch(() => setError("Не удалось загрузить данные аккаунта"))
       .finally(() => setLoading(false));
   }, [selectedAccountId, count]);
 
@@ -88,12 +98,12 @@ export default function OverviewPage() {
     return (
       <div className="panel rounded p-8 text-center">
         <p className="text-sm text-error">{error}</p>
-        {error.includes("connect") && (
+        {(error.includes("connect") || error.includes("подключ")) && (
           <a
             href="/api/instagram/connect"
             className="mt-4 inline-block text-sm text-accent hover:underline"
           >
-            Connect Instagram
+            Подключить Instagram
           </a>
         )}
       </div>
@@ -109,25 +119,27 @@ export default function OverviewPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-foreground">Overview</h1>
+          <h1 className="text-lg font-semibold text-foreground">Аккаунт</h1>
           <p className="text-sm text-muted mt-1">
-            {data.requestedCount === "all" ? "All-time" : "Recent"} —{" "}
-            {totals.posts} post{totals.posts === 1 ? "" : "s"} from @
+            {data.requestedCount === "all" ? "За всё время" : "Недавние"} —{" "}
+            {totals.posts}{" "}
+            {pluralRu(totals.posts, ["публикация", "публикации", "публикаций"])} @
             {data.account.username}
-            {data.truncated ? ` (capped at ${totals.posts})` : ""}
+            {data.truncated ? ` (не больше ${totals.posts})` : ""}
           </p>
           {followers !== null && (
             // Kept out of the tile row below: that row sums the selected posts,
             // whereas this is a current account-level total.
             <p className="mt-1 text-sm text-muted">
-              {followers.toLocaleString()} followers
+              {formatNumberRu(followers)}{" "}
+              {pluralRu(followers, ["подписчик", "подписчика", "подписчиков"])}
             </p>
           )}
         </div>
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           <label className="flex flex-col gap-2 text-sm">
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Range
+              Период
             </span>
             <select
               value={count}
@@ -158,29 +170,30 @@ export default function OverviewPage() {
       {!insightsAvailable && (
         <div className="panel rounded p-4 border border-border">
           <p className="text-sm text-foreground">
-            Views, reach, saved and shares need the insights permission.
+            Для просмотров, охвата, сохранений и репостов нужно разрешение на
+            статистику.
           </p>
           <p className="text-sm text-muted mt-1">
-            Reconnect your account to grant it — likes and comments are shown in
-            the meantime.
+            Переподключите аккаунт, чтобы выдать его, — пока показываем лайки и
+            комментарии.
           </p>
           <a
             href="/api/instagram/connect"
             className="mt-3 inline-block text-sm text-accent hover:underline"
           >
-            Reconnect Instagram
+            Переподключить Instagram
           </a>
         </div>
       )}
 
       {/* Aggregate totals */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <StatCard label="Views" value={formatNumber(totals.views)} />
-        <StatCard label="Reach" value={formatNumber(totals.reach)} />
-        <StatCard label="Likes" value={formatNumber(totals.likes)} />
-        <StatCard label="Comments" value={formatNumber(totals.comments)} />
-        <StatCard label="Saved" value={formatNumber(totals.saved)} />
-        <StatCard label="Shares" value={formatNumber(totals.shares)} />
+        <StatCard label="Просмотры" value={formatNumber(totals.views)} />
+        <StatCard label="Охват" value={formatNumber(totals.reach)} />
+        <StatCard label="Лайки" value={formatNumber(totals.likes)} />
+        <StatCard label="Комментарии" value={formatNumber(totals.comments)} />
+        <StatCard label="Сохранения" value={formatNumber(totals.saved)} />
+        <StatCard label="Репосты" value={formatNumber(totals.shares)} />
       </div>
 
       {/* Follower trend — account-level, independent of the post range */}
@@ -188,9 +201,9 @@ export default function OverviewPage() {
 
       {/* Per-post table */}
       <div className="panel rounded p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Posts</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">Публикации</h2>
         {posts.length === 0 ? (
-          <p className="text-sm text-muted py-8 text-center">No posts found</p>
+          <p className="text-sm text-muted py-8 text-center">Публикаций не найдено</p>
         ) : (
           // Eight metric columns can't compress into a phone; let the table keep
           // its natural width and scroll inside the panel instead.
@@ -198,14 +211,14 @@ export default function OverviewPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-zinc-500 border-b border-border">
-                  <th className="py-2 pr-4 font-medium">Post</th>
-                  <th className="py-2 px-3 font-medium text-right">Views</th>
-                  <th className="py-2 px-3 font-medium text-right">Reach</th>
-                  <th className="py-2 px-3 font-medium text-right">Likes</th>
-                  <th className="py-2 px-3 font-medium text-right">Comments</th>
-                  <th className="py-2 px-3 font-medium text-right">Saved</th>
-                  <th className="py-2 px-3 font-medium text-right">Shares</th>
-                  <th className="py-2 pl-3 font-medium text-right">Date</th>
+                  <th className="py-2 pr-4 font-medium">Публикация</th>
+                  <th className="py-2 px-3 font-medium text-right">Просмотры</th>
+                  <th className="py-2 px-3 font-medium text-right">Охват</th>
+                  <th className="py-2 px-3 font-medium text-right">Лайки</th>
+                  <th className="py-2 px-3 font-medium text-right">Комментарии</th>
+                  <th className="py-2 px-3 font-medium text-right">Сохранения</th>
+                  <th className="py-2 px-3 font-medium text-right">Репосты</th>
+                  <th className="py-2 pl-3 font-medium text-right">Дата</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,11 +235,11 @@ export default function OverviewPage() {
                           rel="noopener noreferrer"
                           className="text-foreground hover:text-accent truncate block"
                         >
-                          {p.caption || `${p.mediaType} post`}
+                          {p.caption || (MEDIA_TYPE_LABEL[p.mediaType] ?? "Публикация")}
                         </a>
                       ) : (
                         <span className="text-foreground truncate block">
-                          {p.caption || `${p.mediaType} post`}
+                          {p.caption || (MEDIA_TYPE_LABEL[p.mediaType] ?? "Публикация")}
                         </span>
                       )}
                     </td>

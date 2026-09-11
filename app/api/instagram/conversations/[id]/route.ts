@@ -3,6 +3,7 @@ import { getCurrentWorkspaceId } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getConversationMessages, MetaApiError } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 export interface ThreadMessage {
   id: string;
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
   const workspaceId = await getCurrentWorkspaceId();
   if (!workspaceId) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
   );
   if (!account) {
     return NextResponse.json(
-      { success: false, error: "Instagram account not connected." },
+      { success: false, error: API_ERRORS.instagramNotConnected },
       { status: 400 }
     );
   }
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
   } catch (err) {
     console.error("[Conversation Messages] Error:", err);
     const message =
-      err instanceof MetaApiError ? err.message : "Failed to load messages";
+      err instanceof MetaApiError ? err.message : API_ERRORS.failedToLoadMessages;
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

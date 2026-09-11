@@ -14,6 +14,7 @@ import {
   getFollowerHistory,
   type FollowerHistoryPoint,
 } from "@/lib/reports/follower-history";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 // Allow time for paginated media + per-post insight calls on larger accounts.
 export const maxDuration = 60;
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
   const workspaceId = await getCurrentWorkspaceId();
   if (!workspaceId) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
@@ -250,7 +251,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[Instagram Overview] Error:", err);
     return NextResponse.json(
-      { success: false, error: "Failed to load Instagram overview" },
+      { success: false, error: API_ERRORS.failedToLoadOverview },
       { status: 500 }
     );
   }

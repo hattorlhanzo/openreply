@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * Sidebar Navigation
+ * Боковое меню
  *
- * Text-only nav with active state and workspace section.
+ * Текстовая навигация с активным пунктом и блоком рабочего пространства.
  */
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BRAND, NAV } from "@/lib/i18n/common";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Overview", href: "/overview" },
-  { label: "Inbox", href: "/inbox" },
-  { label: "Campaigns", href: "/campaigns" },
-  { label: "DM Logs", href: "/logs" },
-  { label: "Settings", href: "/settings" },
-  { label: "Diagnostics", href: "/diagnostics" },
+  { label: NAV.dashboard, href: "/dashboard" },
+  { label: NAV.overview, href: "/overview" },
+  { label: NAV.inbox, href: "/inbox" },
+  { label: NAV.campaigns, href: "/campaigns" },
+  { label: NAV.logs, href: "/logs" },
+  { label: NAV.settings, href: "/settings" },
+  { label: NAV.diagnostics, href: "/diagnostics" },
 ];
 
 interface SidebarProps {
@@ -56,8 +57,18 @@ export default function Sidebar({
           className="px-6 py-5 border-b border-border"
           style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top))" }}
         >
-          <Link href="/dashboard" className="text-base font-semibold">
-            OpenReply
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2.5 text-base font-semibold"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- статичный логотип, оптимизация не нужна */}
+            <img
+              src="/logo-cube.png"
+              alt=""
+              aria-hidden="true"
+              className="h-7 w-auto shrink-0"
+            />
+            <span>{BRAND}</span>
           </Link>
         </div>
 
@@ -88,7 +99,6 @@ export default function Sidebar({
 
         <div className="px-5 py-4 border-t border-border">
           <p className="text-sm text-foreground truncate">{workspaceName}</p>
-          <p className="text-xs text-muted">Self-hosted</p>
         </div>
       </aside>
     </>

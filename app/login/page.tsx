@@ -1,10 +1,9 @@
 import { EMAIL_PROVIDER_ID, signIn } from "@/lib/auth";
-import { getCampaignTemplate } from "@/lib/templates/campaign-templates";
-import { DemoNotice } from "@/components/demo-notice";
+import { BRAND, PRODUCT } from "@/lib/i18n/common";
 
 export const metadata = {
-  title: "Login - OpenReply",
-  description: "Sign in to manage Instagram comment-to-DM campaigns.",
+  title: `Вход — ${BRAND}`,
+  description: "Войдите, чтобы управлять кампаниями «комментарий → сообщение в Direct» в Instagram.",
 };
 
 export default async function LoginPage({
@@ -13,16 +12,11 @@ export default async function LoginPage({
   searchParams: Promise<{
     checkEmail?: string;
     callbackUrl?: string;
-    template?: string;
   }>;
 }) {
   const params = await searchParams;
   const checkEmail = params.checkEmail === "1";
-  const selectedTemplate = getCampaignTemplate(params.template);
-  const templateCallbackUrl = selectedTemplate
-    ? `/campaigns/new?template=${selectedTemplate.slug}`
-    : null;
-  const callbackUrl = params.callbackUrl ?? templateCallbackUrl ?? "/dashboard";
+  const callbackUrl = params.callbackUrl ?? "/dashboard";
 
   async function sendMagicLink(formData: FormData) {
     "use server";
@@ -36,36 +30,17 @@ export default async function LoginPage({
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-foreground">
-            OpenReply
-          </h1>
-          <p className="text-muted text-sm leading-relaxed mt-2">
-            {selectedTemplate
-              ? `Sign in to use the ${selectedTemplate.title} template.`
-              : "Sign in by email, then connect your Instagram professional account."}
-          </p>
+          <h1 className="text-2xl font-semibold text-foreground">{BRAND}</h1>
+          <p className="text-muted text-sm leading-relaxed mt-2">{PRODUCT}</p>
         </div>
 
-        <DemoNotice variant="panel" />
-
         <div className="panel rounded p-8 shadow-black/40">
-          {selectedTemplate && !checkEmail && (
-            <div className="mb-5 border border-accent/20 bg-accent/10 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                Template selected
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {selectedTemplate.title}
-              </p>
-            </div>
-          )}
-
           {checkEmail ? (
             <div className="text-center py-4">
-              <h2 className="text-lg font-semibold mb-2">Check your email</h2>
+              <h2 className="text-lg font-semibold mb-2">Проверьте почту</h2>
               <p className="text-sm text-muted">
-                We sent you a secure sign-in link. Open it on this device to
-                continue.
+                Мы отправили вам ссылку для входа. Откройте её на этом
+                устройстве, чтобы продолжить.
               </p>
             </div>
           ) : (
@@ -75,7 +50,7 @@ export default async function LoginPage({
                   htmlFor="email"
                   className="block text-sm font-medium text-foreground"
                 >
-                  Work email
+                  Электронная почта
                 </label>
                 <input
                   id="email"
@@ -83,7 +58,7 @@ export default async function LoginPage({
                   type="email"
                   required
                   autoComplete="email"
-                  placeholder="you@company.com"
+                  placeholder="you@company.ru"
                   className="w-full px-4 py-3 rounded bg-surface border border-border text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none transition-colors"
                 />
               </div>
@@ -92,7 +67,7 @@ export default async function LoginPage({
                 type="submit"
                 className="w-full inline-flex items-center justify-center gap-2 rounded bg-accent px-6 py-3.5 text-sm font-semibold text-white shadow-indigo-500/25 transition-all hover:shadow-indigo-500/30"
               >
-                Email me a magic link
+                Получить ссылку для входа
               </button>
             </form>
           )}

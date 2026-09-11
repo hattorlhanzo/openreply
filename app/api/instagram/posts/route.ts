@@ -3,13 +3,14 @@ import { resolveWorkspaceId } from "@/lib/bot-auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getAllUserMedia, getUserMedia } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 export async function GET(request: NextRequest) {
   // Session cookie for the dashboard, BOT_API_KEY for the Telegram bot.
   const workspaceId = await resolveWorkspaceId(request);
   if (!workspaceId) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Instagram account not connected. Please connect your account first.",
+        error: API_ERRORS.connectInstagramFirst,
       },
       { status: 400 }
     );
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[Instagram Posts] Error:", err);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch Instagram posts" },
+      { success: false, error: API_ERRORS.failedToFetchPosts },
       { status: 500 }
     );
   }

@@ -11,6 +11,7 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -76,7 +77,7 @@ export async function GET() {
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
@@ -93,13 +94,13 @@ export async function POST(request: NextRequest) {
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can invite members" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyInvite },
       { status: 403 }
     );
   }
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
   const parsed = inviteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { success: false, error: "Invalid invitation", details: parsed.error.flatten() },
+      { success: false, error: API_ERRORS.invalidInvitation, details: parsed.error.flatten() },
       { status: 400 }
     );
   }
@@ -172,13 +173,13 @@ export async function PATCH(request: NextRequest) {
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can update roles" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyRoles },
       { status: 403 }
     );
   }
@@ -186,7 +187,7 @@ export async function PATCH(request: NextRequest) {
   const parsed = updateMemberSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(
-      { success: false, error: "Invalid member update" },
+      { success: false, error: API_ERRORS.invalidMemberUpdate },
       { status: 400 }
     );
   }
@@ -196,7 +197,7 @@ export async function PATCH(request: NextRequest) {
   });
   if (!member || member.role === "OWNER") {
     return NextResponse.json(
-      { success: false, error: "Member cannot be updated" },
+      { success: false, error: API_ERRORS.memberCannotBeUpdated },
       { status: 400 }
     );
   }
@@ -216,13 +217,13 @@ export async function DELETE(request: NextRequest) {
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can remove members" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyRemove },
       { status: 403 }
     );
   }
@@ -230,7 +231,7 @@ export async function DELETE(request: NextRequest) {
   const parsed = deleteSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success || (!parsed.data.memberId && !parsed.data.invitationId)) {
     return NextResponse.json(
-      { success: false, error: "Missing member or invitation ID" },
+      { success: false, error: API_ERRORS.missingMemberOrInvitationId },
       { status: 400 }
     );
   }
@@ -241,7 +242,7 @@ export async function DELETE(request: NextRequest) {
     });
     if (!member || member.role === "OWNER" || member.userId === context.userId) {
       return NextResponse.json(
-        { success: false, error: "Member cannot be removed" },
+        { success: false, error: API_ERRORS.memberCannotBeRemoved },
         { status: 400 }
       );
     }

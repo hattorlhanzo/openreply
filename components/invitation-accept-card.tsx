@@ -29,7 +29,7 @@ export default function InvitationAcceptCard({
       window.location.assign("/dashboard");
       return;
     }
-    setMessage(payload.error ?? "Could not accept invitation");
+    setMessage(payload.error ?? "Не удалось принять приглашение");
     setBusy(false);
   }
 
@@ -39,7 +39,7 @@ export default function InvitationAcceptCard({
         href="/login"
         className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
       >
-        Sign in to accept
+        Войти, чтобы принять
       </a>
     );
   }
@@ -52,13 +52,12 @@ export default function InvitationAcceptCard({
         disabled={busy}
         className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
       >
-        {busy ? "Accepting..." : "Accept invitation"}
+        {busy ? "Принимаем…" : "Принять приглашение"}
       </button>
       {message && <p className="text-sm text-error">{message}</p>}
       <p className="text-xs text-muted">
-        Use the magic link account for {invitedEmail}.
+        Войдите по ссылке из письма на адрес {invitedEmail}.
       </p>
     </div>
   );
 }
-

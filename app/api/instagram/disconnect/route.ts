@@ -4,19 +4,20 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import { API_ERRORS } from "@/lib/i18n/common";
 
 export async function POST(request: NextRequest) {
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized" },
+      { success: false, error: API_ERRORS.unauthorized },
       { status: 401 }
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
-      { success: false, error: "Only owners and admins can disconnect accounts" },
+      { success: false, error: API_ERRORS.ownersAndAdminsOnlyDisconnect },
       { status: 403 }
     );
   }

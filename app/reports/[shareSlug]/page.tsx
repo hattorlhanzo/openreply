@@ -2,18 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCampaignReportBySlug } from "@/lib/reports/data";
+import { BRAND, formatDateRu } from "@/lib/i18n/common";
 
 type ReportPageProps = {
   params: Promise<{ shareSlug: string }>;
 };
 
 function formatDate(date: Date | null) {
-  if (!date) return "No sends yet";
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  if (!date) return "Отправок ещё не было";
+  return formatDateRu(date);
 }
 
 function MetricCard({
@@ -46,14 +43,14 @@ export async function generateMetadata({
 
   if (!report) {
     return {
-      title: "Report Not Found",
+      title: "Отчёт не найден",
       robots: { index: false, follow: false },
     };
   }
 
   return {
-    title: `${report.campaign.name} Campaign Report`,
-    description: `Read-only Instagram comment-to-DM campaign report for ${report.campaign.name}.`,
+    title: `Отчёт по кампании «${report.campaign.name}»`,
+    description: `Отчёт по Instagram-кампании «${report.campaign.name}»: комментарии → сообщения в Direct. Только для чтения.`,
     robots: { index: false, follow: false },
   };
 }
@@ -78,7 +75,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-bold uppercase tracking-wide text-cyan-200">
-                Client campaign report
+                Отчёт по кампании
               </p>
               <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight text-white sm:text-5xl">
                 {report.campaign.name}
@@ -93,25 +90,25 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 )}
                 <span>·</span>
                 <span>
-                  {report.campaign.isActive ? "Active campaign" : "Paused campaign"}
+                  {report.campaign.isActive ? "Кампания активна" : "Кампания на паузе"}
                 </span>
               </div>
             </div>
 
             <div className="border border-white/10 bg-white/[0.035] p-4 text-sm text-zinc-300 md:min-w-64">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Workspace
+                Рабочее пространство
               </p>
               <p className="mt-2 font-bold text-white">{report.workspace.name}</p>
               <p className="mt-4 text-xs text-zinc-500">
-                Generated {formatDate(report.generatedAt)}
+                Сформирован {formatDate(report.generatedAt)}
               </p>
               {report.branded && (
                 <Link
                   href="/"
                   className="mt-4 inline-flex items-center justify-center border border-cyan-200/20 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-200/40"
                 >
-                  Powered by OpenReply
+                  Работает на {BRAND}
                 </Link>
               )}
             </div>
@@ -122,29 +119,29 @@ export default async function ReportPage({ params }: ReportPageProps) {
       <section className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-6 lg:px-8">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <MetricCard
-            label="DMs sent"
+            label="Отправлено"
             value={report.metrics.sent}
-            helper="Private replies successfully sent."
+            helper="Сообщения в Direct, доставленные успешно."
           />
           <MetricCard
-            label="Skipped"
+            label="Пропущено"
             value={report.metrics.skipped}
-            helper="Duplicates, limits, or no-send outcomes."
+            helper="Повторы, лимиты и другие случаи без отправки."
           />
           <MetricCard
-            label="Failed"
+            label="Ошибки"
             value={report.metrics.failed}
-            helper="Replies that need operational review."
+            helper="Отправки, которые нужно проверить."
           />
           <MetricCard
-            label="Clicks"
+            label="Переходы"
             value={report.metrics.clicks}
-            helper="Tracked link visits from replies."
+            helper="Переходы по отслеживаемой ссылке из сообщений."
           />
           <MetricCard
             label="CTR"
             value={`${report.metrics.ctr}%`}
-            helper="Clicks divided by sent replies."
+            helper="Переходы, делённые на отправленные сообщения."
           />
         </div>
 
@@ -153,14 +150,14 @@ export default async function ReportPage({ params }: ReportPageProps) {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-xl font-black text-white">
-                  Last 7 Days
+                  Последние 7 дней
                 </h2>
                 <p className="mt-2 text-sm text-zinc-400">
-                  Sent replies and tracked clicks by day.
+                  Отправленные сообщения и переходы по ссылке по дням.
                 </p>
               </div>
               <p className="text-xs text-zinc-500">
-                Last send: {formatDate(report.metrics.latestSentAt)}
+                Последняя отправка: {formatDate(report.metrics.latestSentAt)}
               </p>
             </div>
             <div className="mt-8 grid h-56 grid-cols-7 items-end gap-1.5 sm:gap-3">
@@ -172,14 +169,14 @@ export default async function ReportPage({ params }: ReportPageProps) {
                       style={{
                         height: `${Math.max((day.sent / maxDaily) * 100, 4)}%`,
                       }}
-                      title={`${day.sent} sent`}
+                      title={`Отправлено: ${day.sent}`}
                     />
                     <div
                       className="w-full bg-emerald-300/75"
                       style={{
                         height: `${Math.max((day.clicks / maxDaily) * 100, 4)}%`,
                       }}
-                      title={`${day.clicks} clicks`}
+                      title={`Переходы: ${day.clicks}`}
                     />
                   </div>
                   <p className="truncate text-center text-[11px] text-zinc-500">
@@ -191,22 +188,22 @@ export default async function ReportPage({ params }: ReportPageProps) {
             <div className="mt-5 flex flex-wrap gap-4 text-xs text-zinc-400">
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 bg-cyan-300" />
-                Sent replies
+                Отправленные сообщения
               </span>
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 bg-emerald-300" />
-                Link clicks
+                Переходы по ссылке
               </span>
             </div>
           </section>
 
           <aside className="space-y-6">
             <section className="border border-white/10 bg-white/[0.035] p-4 sm:p-6">
-              <h2 className="text-xl font-black text-white">Top Keywords</h2>
+              <h2 className="text-xl font-black text-white">Популярные ключевые слова</h2>
               <div className="mt-5 space-y-3">
                 {report.topKeywords.length === 0 && (
                   <p className="text-sm text-zinc-400">
-                    No matched keyword data yet.
+                    Совпадений по ключевым словам пока нет.
                   </p>
                 )}
                 {report.topKeywords.map((keyword) => (
@@ -226,11 +223,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </section>
 
             <section className="border border-white/10 bg-white/[0.035] p-4 sm:p-6">
-              <h2 className="text-xl font-black text-white">Tracked Links</h2>
+              <h2 className="text-xl font-black text-white">Отслеживаемые ссылки</h2>
               <div className="mt-5 space-y-3">
                 {report.trackedLinks.length === 0 && (
                   <p className="text-sm text-zinc-400">
-                    This campaign does not have a tracked link.
+                    В этой кампании нет отслеживаемой ссылки.
                   </p>
                 )}
                 {report.trackedLinks.map((link) => (
@@ -252,11 +249,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </div>
 
         <section className="mt-8 border border-white/10 bg-white/[0.035] p-4 sm:p-6">
-          <h2 className="text-xl font-black text-white">Campaign Setup</h2>
+          <h2 className="text-xl font-black text-white">Настройки кампании</h2>
           <div className="mt-5 grid gap-5 md:grid-cols-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Keywords
+                Ключевые слова
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {report.campaign.keywords.map((keyword) => (
@@ -271,7 +268,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Created
+                Создана
               </p>
               <p className="mt-3 text-sm text-zinc-300">
                 {formatDate(report.campaign.createdAt)}
@@ -279,7 +276,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Source post
+                Публикация-источник
               </p>
               {report.campaign.postUrl ? (
                 <a
@@ -288,10 +285,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   rel="noreferrer"
                   className="mt-3 inline-flex text-sm font-semibold text-cyan-200 transition hover:text-cyan-100"
                 >
-                  View Instagram post
+                  Открыть публикацию в Instagram
                 </a>
               ) : (
-                <p className="mt-3 text-sm text-zinc-400">Not attached</p>
+                <p className="mt-3 text-sm text-zinc-400">Не привязана</p>
               )}
             </div>
           </div>
@@ -299,7 +296,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
         {report.branded && (
           <footer className="mt-8 border-t border-white/10 pt-6 text-center text-xs text-zinc-500">
-            Built with OpenReply, the Instagram comment-to-DM campaign OS.
+            Сделано в {BRAND} — автоматизация ответов на комментарии в Instagram Direct.
           </footer>
         )}
       </section>

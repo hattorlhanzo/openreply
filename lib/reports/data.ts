@@ -139,9 +139,9 @@ export async function getCampaignReportBySlug(shareSlug: string) {
       ]);
 
       return {
-        date: start.toLocaleDateString("en-US", {
-          month: "short",
+        date: start.toLocaleDateString("ru-RU", {
           day: "numeric",
+          month: "short",
         }),
         sent,
         clicks,
