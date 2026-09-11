@@ -121,6 +121,19 @@ services:
   worker:
     <<: *app
     command: ["npm", "run", "worker"]
+    # Host networking, for the same reason as the bot but with money attached.
+    # The IPv4 route from this network to graph.instagram.com drops roughly a
+    # quarter of connections, while IPv6 to the same host is clean — measured
+    # 4/15 against 0/15. Containers are IPv4-only because Docker ships with
+    # IPv6 off, and the host has a single /128 with no delegated prefix, so
+    # giving containers real IPv6 would mean NAT66 plus enable_ipv6 on every
+    # compose network. The worker sends every DM, so it gets the host's stack
+    # directly instead. Retries were hiding this as a ~6% failure rate where
+    # the historical floor is under 1%.
+    network_mode: host
+    extra_hosts:
+      - "postgres:127.0.0.1"
+      - "redis:127.0.0.1"
     depends_on:
       postgres:
         condition: service_healthy
