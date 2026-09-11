@@ -13,6 +13,8 @@ interface AccountSelectProps {
   onChange: (value: string) => void;
   includeAll?: boolean;
   label?: string;
+  /** Низкий селект (36px) с мелкой подписью — для шапок страниц. */
+  compact?: boolean;
 }
 
 export default function AccountSelect({
@@ -21,16 +23,23 @@ export default function AccountSelect({
   onChange,
   includeAll = true,
   label = "Instagram-аккаунт",
+  compact = false,
 }: AccountSelectProps) {
   return (
-    <label className="flex flex-col gap-2 text-sm">
-      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+    <label className="block">
+      <span
+        className={
+          compact
+            ? "mb-1.5 block text-[12px] font-semibold text-muted"
+            : "label"
+        }
+      >
         {label}
       </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-52 rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-accent/40"
+        className={`select min-w-52 ${compact ? "!h-9 text-[13px]" : ""}`}
       >
         {includeAll && <option value="all">Все аккаунты</option>}
         {accounts.map((account) => (

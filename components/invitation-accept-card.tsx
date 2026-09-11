@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconCheck } from "@/components/ui/icons";
 
 interface InvitationAcceptCardProps {
   token: string;
@@ -35,12 +36,14 @@ export default function InvitationAcceptCard({
 
   if (!isSignedIn) {
     return (
-      <a
-        href="/login"
-        className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
-      >
-        Войти, чтобы принять
-      </a>
+      <div className="space-y-3">
+        <a href="/login" className="btn btn-primary btn-lg w-full">
+          Войти, чтобы принять
+        </a>
+        <p className="hint text-center">
+          Войдите по ссылке из письма на адрес {invitedEmail}.
+        </p>
+      </div>
     );
   }
 
@@ -50,12 +53,17 @@ export default function InvitationAcceptCard({
         type="button"
         onClick={acceptInvite}
         disabled={busy}
-        className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
+        className="btn btn-primary btn-lg w-full"
       >
+        <IconCheck size={18} />
         {busy ? "Принимаем…" : "Принять приглашение"}
       </button>
-      {message && <p className="text-sm text-error">{message}</p>}
-      <p className="text-xs text-muted">
+      {message && (
+        <p className="text-center text-[13px] text-error" role="alert">
+          {message}
+        </p>
+      )}
+      <p className="hint text-center">
         Войдите по ссылке из письма на адрес {invitedEmail}.
       </p>
     </div>

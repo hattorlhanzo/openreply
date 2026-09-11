@@ -9,7 +9,8 @@
 import { useEffect, useState, useCallback } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import StatusBadge from "@/components/status-badge";
-import { DM_STATUS_LABEL } from "@/lib/i18n/common";
+import { DM_STATUS_LABEL, NAV, pluralRu } from "@/lib/i18n/common";
+import { IconChevronLeft, IconChevronRight, IconList } from "@/components/ui/icons";
 
 interface DmLog {
   id: string;
@@ -39,6 +40,13 @@ const STATUS_FILTERS = [
   "SKIPPED_PLAN_LIMIT",
   "SKIPPED_DEDUP",
 ];
+
+const COLUMNS = ["Комментатор", "Комментарий", "Кампания", "Аккаунт", "Статус", "Время"];
+
+function initialOf(name: string): string {
+  const ch = name.replace(/^@/, "").trim().charAt(0);
+  return ch ? ch.toUpperCase() : "?";
+}
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<DmLog[]>([]);
@@ -98,27 +106,21 @@ export default function LogsPage() {
     setPage(1);
   }
 
+  const total = pagination?.total ?? 0;
+  const subtitle = loading
+    ? "Загрузка…"
+    : total === 0
+      ? "Записей пока нет"
+      : `${total} ${pluralRu(total, ["запись", "записи", "записей"])}${
+          statusFilter !== "ALL" ? ` · ${DM_STATUS_LABEL[statusFilter] ?? statusFilter}` : ""
+        }`;
+
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {STATUS_FILTERS.map((status) => (
-            <button
-              key={status}
-              onClick={() => handleFilterChange(status)}
-              className={`
-                px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-                ${
-                  statusFilter === status
-                    ? "bg-accent/15 text-accent border border-accent/20"
-                    : "bg-surface text-muted border border-border hover:border-border-hover hover:text-foreground"
-                }
-              `}
-            >
-              {status === "ALL" ? "Все" : DM_STATUS_LABEL[status] ?? status}
-            </button>
-          ))}
+    <div>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">{NAV.logs}</h1>
+          <p className="page-sub tabular-nums">{subtitle}</p>
         </div>
         {accounts.length > 1 && (
           <AccountSelect
@@ -129,108 +131,149 @@ export default function LogsPage() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="panel rounded overflow-hidden">
-        {/* Six columns don't fit a phone; the table keeps its width and scrolls
-            horizontally inside the panel rather than crushing every cell. */}
+      {/* Фильтр статусов: на узком экране прокручивается по горизонтали */}
+      <div className="mb-4 overflow-x-auto">
+        <div className="seg" role="group" aria-label="Фильтр по статусу">
+          {STATUS_FILTERS.map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => handleFilterChange(status)}
+              aria-pressed={statusFilter === status}
+              className="seg-item"
+            >
+              {status === "ALL" ? "Все" : DM_STATUS_LABEL[status] ?? status}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        {/* Шесть колонок не влезают в телефон: таблица сохраняет ширину и
+            прокручивается внутри карточки, а не сжимает ячейки. */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="tbl min-w-[820px]">
             <thead>
-              <tr className="border-b border-border text-left">
-                <th className="px-4 py-4 text-xs font-semibold text-muted uppercase tracking-wider sm:px-6">Комментатор</th>
-                <th className="px-4 py-4 text-xs font-semibold text-muted uppercase tracking-wider sm:px-6">Комментарий</th>
-                <th className="px-4 py-4 text-xs font-semibold text-muted uppercase tracking-wider sm:px-6">Кампания</th>
-                <th className="px-4 py-4 text-xs font-semibold text-muted uppercase tracking-wider sm:px-6">Аккаунт</th>
-                <th className="px-4 py-4 text-xs font-semibold text-muted uppercase tracking-wider sm:px-6">Статус</th>
-                <th className="px-4 py-4 text-xs font-semibold text-muted uppercase tracking-wider sm:px-6">Время</th>
+              <tr>
+                {COLUMNS.map((c) => (
+                  <th key={c}>{c}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {loading && (
-                <>
-                  {[...Array(5)].map((_, i) => (
-                    <tr key={i}>
-                      <td colSpan={6} className="px-4 py-4 sm:px-6">
-                        <div className="h-4 bg-surface-hover rounded" />
-                      </td>
-                    </tr>
-                  ))}
-                </>
-              )}
+            <tbody>
+              {loading &&
+                [...Array(6)].map((_, i) => (
+                  <tr key={i}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <span className="skeleton h-8 w-8 !rounded-full" />
+                        <span className="skeleton h-3.5 w-24" />
+                      </div>
+                    </td>
+                    <td><span className="skeleton block h-3.5 w-40" /></td>
+                    <td><span className="skeleton block h-3.5 w-32" /></td>
+                    <td><span className="skeleton block h-3.5 w-28" /></td>
+                    <td><span className="skeleton block h-6 w-24 !rounded-full" /></td>
+                    <td><span className="skeleton block h-3.5 w-24" /></td>
+                  </tr>
+                ))}
+
               {!loading && logs.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted sm:px-6">
-                    Записей нет
+                  <td colSpan={6} className="!p-0">
+                    <div className="empty">
+                      <span className="empty-icon">
+                        <IconList size={22} />
+                      </span>
+                      <p className="empty-title">Записей нет</p>
+                      <p className="text-[13px]">
+                        {statusFilter === "ALL"
+                          ? "Как только кампания ответит на комментарий, запись появится здесь."
+                          : "По выбранному статусу отправок не было."}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
+
               {!loading &&
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-surface-hover/50 transition-colors">
-                    <td className="px-4 py-4 sm:px-6">
-                      <span className="font-medium text-foreground">
-                        @{log.commenterName ?? log.commenterId.slice(0, 8)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 max-w-[200px] sm:px-6">
-                      <span className="text-muted truncate block">{log.commentText}</span>
-                    </td>
-                    <td className="px-4 py-4 sm:px-6">
-                      <span className="text-muted">{log.automation.name}</span>
-                    </td>
-                    <td className="px-4 py-4 sm:px-6">
-                      <span className="text-muted">@{log.instagramAccount.username}</span>
-                    </td>
-                    <td className="px-4 py-4 sm:px-6">
-                      <StatusBadge status={log.status} />
-                    </td>
-                    <td className="px-4 py-4 text-muted whitespace-nowrap sm:px-6">
-                      {new Date(log.createdAt).toLocaleString("ru-RU", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                  </tr>
-                ))}
+                logs.map((log) => {
+                  const name = log.commenterName ?? log.commenterId.slice(0, 8);
+                  return (
+                    <tr key={log.id}>
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <span className="avatar">{initialOf(name)}</span>
+                          <span className="truncate font-medium text-foreground">@{name}</span>
+                        </div>
+                      </td>
+                      <td className="max-w-[260px]">
+                        <span className="block truncate text-muted-2" title={log.commentText}>
+                          {log.commentText}
+                        </span>
+                      </td>
+                      <td className="max-w-[220px]">
+                        <span className="block truncate text-muted-2">{log.automation.name}</span>
+                      </td>
+                      <td>
+                        <span className="text-muted">@{log.instagramAccount.username}</span>
+                      </td>
+                      <td>
+                        <StatusBadge status={log.status} />
+                      </td>
+                      <td className="whitespace-nowrap text-[13px] text-muted tabular-nums">
+                        {new Date(log.createdAt).toLocaleString("ru-RU", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 border-t border-border sm:px-6">
-            <p className="text-xs text-muted">
+        {pagination && pagination.total > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle px-4 py-3 sm:px-5">
+            <p className="text-[13px] text-muted tabular-nums">
               Показано {(pagination.page - 1) * pagination.limit + 1}–
               {Math.min(pagination.page * pagination.limit, pagination.total)} из{" "}
               {pagination.total}
             </p>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => {
-                  setLoading(true);
-                  setPage(page - 1);
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted border border-border hover:text-foreground hover:border-border-hover transition-all disabled:opacity-30 disabled:pointer-events-none"
-              >
-                Назад
-              </button>
-              <span className="text-xs text-muted px-2">
-                {page} / {pagination.totalPages}
-              </span>
-              <button
-                disabled={page >= pagination.totalPages}
-                onClick={() => {
-                  setLoading(true);
-                  setPage(page + 1);
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted border border-border hover:text-foreground hover:border-border-hover transition-all disabled:opacity-30 disabled:pointer-events-none"
-              >
-                Вперёд
-              </button>
-            </div>
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => {
+                    setLoading(true);
+                    setPage(page - 1);
+                  }}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <IconChevronLeft size={16} />
+                  Назад
+                </button>
+                <span className="px-1 text-[13px] text-muted tabular-nums">
+                  {page} / {pagination.totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => {
+                    setLoading(true);
+                    setPage(page + 1);
+                  }}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Вперёд
+                  <IconChevronRight size={16} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

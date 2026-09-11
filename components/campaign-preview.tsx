@@ -150,7 +150,8 @@ function StatusBar() {
 }
 
 function Phone({ children }: { children: React.ReactNode }) {
-  const btn = "absolute w-[3px] rounded-sm bg-gradient-to-r from-zinc-500 to-zinc-700";
+  // Solid frame, no gradients (ERP rule): titanium edge → black bezel → screen.
+  const btn = "absolute w-[3px] rounded-sm bg-zinc-500";
   return (
     // max-w-full so the fixed 300px frame cannot overflow a narrow screen
     <div className="relative w-[300px] max-w-full">
@@ -159,11 +160,13 @@ function Phone({ children }: { children: React.ReactNode }) {
       <span className={`${btn} -left-[2px] top-[140px] h-12`} />
       <span className={`${btn} -left-[2px] top-[200px] h-12`} />
       {/* Right side buttons: side/power, camera control */}
-      <span className={`${btn} -right-[2px] left-auto top-[150px] h-20 bg-gradient-to-l`} />
-      <span className={`${btn} -right-[2px] left-auto top-[250px] h-9 bg-gradient-to-l`} />
+      <span className={`${btn} -right-[2px] left-auto top-[150px] h-20`} />
+      <span className={`${btn} -right-[2px] left-auto top-[250px] h-9`} />
 
-      {/* Titanium frame → black bezel → screen */}
-      <div className="relative rounded-[3rem] bg-gradient-to-br from-zinc-500 via-zinc-700 to-zinc-600 p-[3px] shadow-2xl">
+      <div
+        className="relative rounded-[3rem] bg-zinc-600 p-[3px]"
+        style={{ boxShadow: "var(--shadow-card)" }}
+      >
         <div className="rounded-[2.85rem] bg-black p-[9px]">
           <div className="relative h-[640px] overflow-hidden rounded-[2.3rem] bg-black">
             {/* Dynamic Island */}
@@ -555,17 +558,14 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
         )}
       </Phone>
 
-      <div className="inline-flex rounded-full bg-surface p-1">
+      <div className="seg max-w-full flex-wrap justify-center">
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => onTabChange(t.key)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-              activeTab === t.key
-                ? "bg-background font-medium text-foreground ring-1 ring-accent/40"
-                : "text-muted hover:text-foreground"
-            }`}
+            aria-pressed={activeTab === t.key}
+            className="seg-item !px-2.5 !text-[12px]"
           >
             {t.label}
           </button>

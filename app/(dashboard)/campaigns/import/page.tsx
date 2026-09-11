@@ -13,6 +13,17 @@ import { useRouter } from "next/navigation";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { parseCsv } from "@/lib/utils/csv";
 import { IMPORT_QUEUE_KEY, IMPORT_ACCOUNT_KEY } from "@/lib/import-queue";
+import { IconAlert, IconChevronLeft, IconList } from "@/components/ui/icons";
+
+const COLUMNS: { name: string; required?: boolean; desc: string }[] = [
+  { name: "keywords", required: true, desc: "ключевые слова через запятую" },
+  { name: "dm_message", required: true, desc: "сообщение в Direct" },
+  { name: "name", desc: "название кампании" },
+  { name: "public_reply", desc: "публичный ответ под публикацией" },
+  { name: "tracked_url", desc: "отслеживаемая ссылка" },
+  { name: "opening_dm", desc: "первое сообщение" },
+  { name: "opening_dm_button", desc: "подпись кнопки первого сообщения" },
+];
 
 const SAMPLE = `keywords,dm_message,public_reply,tracked_url,opening_dm,opening_dm_button
 "МЕНЮ","Вот наше меню: {link}","Ответили в Direct 📩","https://vash-sait.ru/menu","Здравствуйте! Нажмите кнопку — пришлём меню","Получить меню"
@@ -83,78 +94,137 @@ export default function ImportCampaignsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <h1 className="text-lg font-semibold">Импорт кампаний</h1>
-        <p className="text-sm text-muted mt-1">
-          Вставьте CSV — одна строка на кампанию. Каждая строка откроется в
-          конструкторе с заполненными полями: вы проверите её и выберете Reels
-          перед сохранением. Обязательные колонки —{" "}
-          <code className="text-accent">keywords</code> и{" "}
-          <code className="text-accent">dm_message</code>. Необязательные:{" "}
-          <code className="text-accent">name</code>,{" "}
-          <code className="text-accent">public_reply</code>,{" "}
-          <code className="text-accent">tracked_url</code>,{" "}
-          <code className="text-accent">opening_dm</code>,{" "}
-          <code className="text-accent">opening_dm_button</code>. Ключевые слова —
-          в одной ячейке через запятую. Чтобы вставить отслеживаемую ссылку,
-          используйте в сообщении{" "}
-          <code className="text-accent">{"{link}"}</code>.
-        </p>
+        <button
+          type="button"
+          onClick={() => router.push("/campaigns")}
+          className="mb-3 inline-flex items-center gap-1 text-[13px] text-muted hover:text-foreground"
+        >
+          <IconChevronLeft size={15} />
+          Кампании
+        </button>
+        <div className="page-head !mb-0">
+          <div>
+            <h1 className="page-title">Импорт кампаний</h1>
+            <p className="page-sub">
+              Вставьте CSV — одна строка на кампанию. Каждая откроется в
+              конструкторе с заполненными полями: вы проверите её и выберете Reels
+              перед сохранением.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div className="flex items-center gap-3">
+            <span className="icon-tile !h-8 !w-8 !rounded-[9px]">
+              <IconList size={16} />
+            </span>
+            <span className="card-title">Колонки CSV</span>
+          </div>
+        </div>
+        <div className="card-body !p-0">
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Колонка</th>
+                  <th>Что содержит</th>
+                  <th className="!text-right">Обязательна</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COLUMNS.map((c) => (
+                  <tr key={c.name}>
+                    <td>
+                      <code className="rounded-[6px] bg-surface-2 px-1.5 py-0.5 font-mono text-[12px] text-accent-hi">
+                        {c.name}
+                      </code>
+                    </td>
+                    <td className="text-muted-2">{c.desc}</td>
+                    <td className="text-right">
+                      {c.required ? (
+                        <span className="badge badge-accent badge-plain">да</span>
+                      ) : (
+                        <span className="text-[12px] text-muted">нет</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hint border-t border-border-subtle px-5 py-3 !mt-0">
+            Ключевые слова — в одной ячейке через запятую. Чтобы вставить
+            отслеживаемую ссылку, используйте в сообщении{" "}
+            <code className="font-mono text-accent-hi">{"{link}"}</code>.
+          </p>
+        </div>
       </div>
 
       {error && (
-        <div className="p-4 rounded bg-error/10 border border-error/20 text-error text-sm">
-          {error}
+        <div className="card flex items-start gap-3 p-4">
+          <span className="icon-tile !h-8 !w-8 !rounded-[9px] icon-tile-error">
+            <IconAlert size={16} />
+          </span>
+          <div>
+            <span className="badge badge-error">Не удалось импортировать</span>
+            <p className="mt-1.5 text-[13px] text-foreground">{error}</p>
+          </div>
         </div>
       )}
 
-      {accounts.length > 1 && (
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-foreground">
-            Instagram-аккаунт
-          </label>
-          <AccountSelect
-            accounts={accounts}
-            value={selectedAccountId}
-            onChange={setSelectedAccountId}
-            includeAll={false}
-            label="Аккаунт"
-          />
+      <div className="card">
+        <div className="card-head">
+          <span className="card-title">Данные</span>
+          <button
+            type="button"
+            onClick={() => setCsv(SAMPLE)}
+            className="btn btn-ghost btn-sm"
+          >
+            Заполнить примером
+          </button>
         </div>
-      )}
-
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-foreground">CSV</label>
-        <textarea
-          value={csv}
-          onChange={(e) => setCsv(e.target.value)}
-          placeholder={SAMPLE}
-          rows={10}
-          className="w-full px-4 py-3 rounded bg-surface border border-border text-sm font-mono text-foreground placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none resize-y"
-        />
-        <button
-          type="button"
-          onClick={() => setCsv(SAMPLE)}
-          className="text-xs text-muted hover:text-foreground"
-        >
-          Заполнить примером
-        </button>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <button
-          onClick={startImport}
-          className="px-5 py-2 rounded bg-accent text-sm font-medium text-white hover:bg-accent-hover"
-        >
-          Проверить и импортировать
-        </button>
-        <button
-          onClick={() => router.push("/campaigns")}
-          className="px-5 py-2 rounded text-sm text-muted hover:text-foreground border border-border"
-        >
-          Отмена
-        </button>
+        <div className="card-body space-y-4">
+          {accounts.length > 1 && (
+            <AccountSelect
+              accounts={accounts}
+              value={selectedAccountId}
+              onChange={setSelectedAccountId}
+              includeAll={false}
+              label="Instagram-аккаунт"
+            />
+          )}
+          <div>
+            <label className="label" htmlFor="import-csv">
+              CSV
+            </label>
+            <textarea
+              id="import-csv"
+              value={csv}
+              onChange={(e) => setCsv(e.target.value)}
+              placeholder={SAMPLE}
+              rows={10}
+              spellCheck={false}
+              className="textarea font-mono !text-[13px]"
+            />
+            <p className="hint">Первая строка — заголовки колонок.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border-subtle px-5 py-4">
+          <button
+            type="button"
+            onClick={() => router.push("/campaigns")}
+            className="btn btn-secondary"
+          >
+            Отмена
+          </button>
+          <button type="button" onClick={startImport} className="btn btn-primary">
+            Проверить и импортировать
+          </button>
+        </div>
       </div>
     </div>
   );

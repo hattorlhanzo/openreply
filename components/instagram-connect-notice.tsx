@@ -1,13 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { IconAlert, IconCheck } from "@/components/ui/icons";
 
 type Tone = "error" | "warning" | "success";
 
-const TONE_CLASSES: Record<Tone, string> = {
-  error: "border-error/20 bg-error/10 text-error",
-  warning: "border-warning/20 bg-warning/10 text-warning",
-  success: "border-success/20 bg-success/10 text-success",
+const TONE_TILE: Record<Tone, string> = {
+  error: "icon-tile-error",
+  warning: "icon-tile-warning",
+  success: "icon-tile-success",
 };
 
 const MESSAGES: Record<string, { tone: Tone; title: string; detail: string }> = {
@@ -58,9 +59,9 @@ export function InstagramConnectNotice() {
           и перезапустите сервер:
         </p>
         {missing.length > 0 && (
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 flex flex-wrap gap-1.5">
             {missing.map((name) => (
-              <li key={name} className="font-mono text-xs">
+              <li key={name} className="chip chip-outline font-mono !text-[11px]">
                 {name}
               </li>
             ))}
@@ -86,9 +87,7 @@ export function InstagramConnectNotice() {
           разрешений.
         </p>
         {reason && (
-          <p className="mt-2 font-mono text-xs break-words opacity-80">
-            {reason}
-          </p>
+          <p className="mt-2 break-words font-mono text-xs text-muted">{reason}</p>
         )}
       </Notice>
     );
@@ -114,9 +113,16 @@ function Notice({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`rounded border p-4 text-sm ${TONE_CLASSES[tone]}`}>
-      <p className="font-semibold">{title}</p>
-      <div className="mt-1 opacity-90">{children}</div>
+    <div className="card" role={tone === "error" ? "alert" : "status"}>
+      <div className="flex items-start gap-4 p-4">
+        <span className={`icon-tile ${TONE_TILE[tone]}`}>
+          {tone === "success" ? <IconCheck size={18} /> : <IconAlert size={18} />}
+        </span>
+        <div className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted-2">
+          <p className="text-[14px] font-semibold text-foreground">{title}</p>
+          <div className="mt-1">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }

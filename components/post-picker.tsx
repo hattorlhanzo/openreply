@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { readCache, writeCache } from "@/lib/client-cache";
+import { IconCheck, IconInstagram, IconSearch } from "@/components/ui/icons";
 
 const PAGE_SIZE = 60;
 
@@ -100,9 +101,9 @@ export default function PostPicker({
 
   if (loading) {
     return (
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="aspect-square rounded bg-surface" />
+          <div key={i} className="skeleton aspect-square !rounded-[10px]" />
         ))}
       </div>
     );
@@ -110,17 +111,23 @@ export default function PostPicker({
 
   if (error) {
     return (
-      <div className="text-center py-8">
-        <p className="text-sm text-muted">{error}</p>
-        <p className="text-xs text-zinc-500 mt-1">Сначала подключите Instagram-аккаунт</p>
+      <div className="empty !py-8">
+        <span className="empty-icon">
+          <IconInstagram size={20} />
+        </span>
+        <p className="empty-title">{error}</p>
+        <p className="text-[12px]">Сначала подключите Instagram-аккаунт</p>
       </div>
     );
   }
 
   if (posts.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-sm text-muted">Публикации не найдены</p>
+      <div className="empty !py-8">
+        <span className="empty-icon">
+          <IconInstagram size={20} />
+        </span>
+        <p className="empty-title">Публикации не найдены</p>
       </div>
     );
   }
@@ -136,37 +143,45 @@ export default function PostPicker({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <input
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            // Back to one batch on every new search. Without this, a grid
-            // expanded under an earlier query stays expanded once it is
-            // cleared, which is the case this whole change exists to avoid.
-            setShown(PAGE_SIZE);
-          }}
-          placeholder="Поиск публикаций по подписи…"
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-        />
-        <span className="shrink-0 text-xs text-muted">{posts.length}</span>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <IconSearch
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+          />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Back to one batch on every new search. Without this, a grid
+              // expanded under an earlier query stays expanded once it is
+              // cleared, which is the case this whole change exists to avoid.
+              setShown(PAGE_SIZE);
+            }}
+            placeholder="Поиск публикаций по подписи…"
+            className="input !h-9 !pl-9 !text-[13px]"
+          />
+        </div>
+        <span className="badge badge-plain badge-muted tabular-nums">{posts.length}</span>
       </div>
       {visible.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted">
-          По запросу &laquo;{query}&raquo; ничего не найдено
-        </p>
+        <div className="empty !py-6">
+          <p className="text-[13px]">
+            По запросу &laquo;{query}&raquo; ничего не найдено
+          </p>
+        </div>
       ) : (
         <>
           {usedPostIds && Object.keys(usedPostIds).length > 0 && (
             <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm border border-warning/50" />
-              Уже используется
+              <span className="inline-block h-2.5 w-2.5 rounded-[3px] border-2 border-warning" />
+              Уже используется в другой кампании
             </p>
           )}
           {/* auto-rows-min + content-start keep each row at its natural height.
               Without them the rows share out max-h-64 instead of scrolling, and
               the square thumbnails flatten into strips. */}
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 auto-rows-min content-start overflow-y-auto p-1">
+          <div className="grid max-h-64 auto-rows-min grid-cols-3 content-start gap-2 overflow-y-auto p-1 sm:grid-cols-4">
             {visible.map((post) => {
               const isSelected = selectedPostId === post.id;
               const usedByName = usedPostIds?.[post.id];
@@ -187,13 +202,13 @@ export default function PostPicker({
             aria-pressed={isSelected}
             title={isUsed ? `Уже используется в кампании «${usedByName}»` : undefined}
             className={`
-              relative aspect-square rounded overflow-hidden border-2
+              relative aspect-square overflow-hidden rounded-[10px] border-2 bg-surface-2 transition-colors
               ${
                 isSelected
                   ? "border-accent"
                   : isUsed
-                    ? "border-warning/40 hover:border-warning/60"
-                    : "border-border hover:border-border-hover"
+                    ? "border-warning/60 hover:border-warning"
+                    : "border-transparent hover:border-border-hover"
               }
             `}
           >
@@ -203,11 +218,11 @@ export default function PostPicker({
                 alt={post.caption?.slice(0, 50) ?? "Публикация Instagram"}
                 loading="lazy"
                 decoding="async"
-                className={`w-full h-full object-cover ${isUsed ? "opacity-75" : ""}`}
+                className={`h-full w-full object-cover ${isUsed ? "opacity-60" : ""}`}
               />
             ) : (
-              <div className="w-full h-full bg-surface flex items-center justify-center">
-                <span className="text-xs text-muted">Нет изображения</span>
+              <div className="flex h-full w-full items-center justify-center">
+                <span className="text-[11px] text-muted">Нет изображения</span>
               </div>
             )}
             {showVideo && (
@@ -224,9 +239,14 @@ export default function PostPicker({
                 }`}
               />
             )}
+            {isVideo && !isSelected && (
+              <span className="absolute left-1.5 top-1.5 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                Reels
+              </span>
+            )}
             {isSelected && (
-              <span className="absolute bottom-0 inset-x-0 bg-accent text-white text-xs py-1">
-                Выбрано
+              <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-accent text-white">
+                <IconCheck size={12} strokeWidth={2.5} />
               </span>
             )}
           </button>
@@ -237,7 +257,7 @@ export default function PostPicker({
             <button
               type="button"
               onClick={() => setShown((n) => n + PAGE_SIZE)}
-              className="w-full rounded-lg border border-border py-2 text-sm text-muted hover:text-foreground"
+              className="btn btn-secondary btn-sm w-full"
             >
               Показать ещё {Math.min(PAGE_SIZE, remaining)}
             </button>

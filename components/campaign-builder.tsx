@@ -23,6 +23,15 @@ import {
   IMPORT_ACCOUNT_KEY,
   type ImportRow,
 } from "@/lib/import-queue";
+import {
+  IconAlert,
+  IconChevronLeft,
+  IconInstagram,
+  IconList,
+  IconPlus,
+  IconX,
+  IconZap,
+} from "@/components/ui/icons";
 
 type TriggerScope = "specific" | "any" | "next";
 type MatchMode = "specific" | "any";
@@ -62,16 +71,25 @@ interface CampaignBuilderProps {
 }
 
 function Section({
+  step,
   title,
   children,
 }: {
+  step: number;
   title: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-      {children}
+    <div className="card">
+      <div className="card-head !py-3.5">
+        <div className="flex items-center gap-3">
+          <span className="icon-tile !h-7 !w-7 !rounded-[8px] text-[12px] font-bold tabular-nums">
+            {step}
+          </span>
+          <span className="card-title">{title}</span>
+        </div>
+      </div>
+      <div className="card-body space-y-3 !p-4">{children}</div>
     </div>
   );
 }
@@ -88,14 +106,15 @@ function Radio({
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={checked}
       onClick={onSelect}
-      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-        checked ? "border-accent bg-accent/5" : "border-border hover:border-border-hover"
-      }`}
+      data-checked={checked}
+      className="choice w-full text-left"
     >
       <span
-        className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
-          checked ? "border-accent" : "border-zinc-500"
+        className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 ${
+          checked ? "border-accent" : "border-border-hover"
         }`}
       >
         {checked && <span className="h-2 w-2 rounded-full bg-accent" />}
@@ -108,16 +127,21 @@ function Radio({
 function Toggle({
   on,
   onToggle,
+  label,
 }: {
   on: boolean;
   onToggle: () => void;
+  label?: string;
 }) {
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
       onClick={onToggle}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-        on ? "bg-accent" : "bg-zinc-300"
+        on ? "bg-accent" : "bg-border-hover"
       }`}
     >
       <span
@@ -126,6 +150,33 @@ function Toggle({
         }`}
       />
     </button>
+  );
+}
+
+/** A toggle row with optional nested fields — a sub-block inside a step card. */
+function ToggleBlock({
+  on,
+  onToggle,
+  label,
+  children,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  label: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-[10px] border p-3 transition-colors ${
+        on ? "border-border bg-surface" : "border-border-subtle bg-surface-2"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[14px] text-foreground">{label}</span>
+        <Toggle on={on} onToggle={onToggle} />
+      </div>
+      {on && children && <div className="mt-3 space-y-2">{children}</div>}
+    </div>
   );
 }
 
@@ -533,64 +584,104 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   }
 
   if (loading) {
-    return <div className="panel h-64 rounded" />;
-  }
-
-  if (notFound) {
     return (
-      <div className="panel rounded p-8 text-center">
-        <p className="text-sm text-muted">Кампания не найдена.</p>
-        <button
-          onClick={() => router.push("/campaigns")}
-          className="mt-4 rounded border border-border px-4 py-2 text-sm text-muted hover:text-foreground"
-        >
-          К списку кампаний
-        </button>
+      <div className="space-y-5">
+        <div className="card h-16" />
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-4">
+            <div className="card h-40" />
+            <div className="card h-64" />
+          </div>
+          <div className="card h-[520px]" />
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {importQueue && (
-        <div className="rounded border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
-          <span className="font-medium text-foreground">
-            Импорт: {importTotal - importQueue.length + 1} из {importTotal}.
-          </span>{" "}
-          <span className="text-muted">
-            Поля заполнены из вашего CSV. Выберите Reels, поправьте что нужно и
-            сохраните — откроется следующая строка. Не нужна — нажмите «Пропустить».
+  if (notFound) {
+    return (
+      <div className="card">
+        <div className="empty !py-14">
+          <span className="empty-icon">
+            <IconZap size={22} />
           </span>
+          <p className="empty-title">Кампания не найдена</p>
+          <p className="text-[13px]">Возможно, её удалили или ссылка устарела.</p>
+          <button
+            type="button"
+            onClick={() => router.push("/campaigns")}
+            className="btn btn-secondary mt-3"
+          >
+            <IconChevronLeft size={16} />
+            К списку кампаний
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const fieldCls = "input";
+  const areaCls = "textarea";
+
+  return (
+    <div className="space-y-5">
+      {importQueue && (
+        <div className="card flex items-start gap-3 p-4">
+          <span className="icon-tile !h-8 !w-8 !rounded-[9px]">
+            <IconList size={16} />
+          </span>
+          <div className="min-w-0 flex-1 text-[13px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-foreground">Импорт из CSV</span>
+              <span className="badge badge-accent badge-plain tabular-nums">
+                {importTotal - importQueue.length + 1} из {importTotal}
+              </span>
+            </div>
+            <p className="mt-1 text-muted">
+              Поля заполнены из вашего CSV. Выберите Reels, поправьте что нужно и
+              сохраните — откроется следующая строка. Не нужна — нажмите «Пропустить».
+            </p>
+          </div>
         </div>
       )}
 
       {/* Top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <div className="page-head !mb-1 flex-col sm:flex-row sm:!items-center">
         <div className="flex min-w-0 items-center gap-3">
-          {mode === "edit" ? (
-            <>
-              <span className="truncate text-sm font-semibold text-foreground">
-                {name || "Кампания без названия"}
-              </span>
-              <span
-                className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                  isActive ? "bg-success/15 text-success" : "bg-zinc-500/15 text-muted"
-                }`}
-              >
-                {isActive ? "АКТИВНА" : "НА ПАУЗЕ"}
-              </span>
-            </>
-          ) : (
-            <span className="text-sm text-muted">Новая кампания</span>
-          )}
+          <span
+            className={`icon-tile !h-11 !w-11 ${
+              mode === "edit" ? (isActive ? "icon-tile-success" : "icon-tile-muted") : ""
+            }`}
+          >
+            <IconZap size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="page-title truncate">
+              {mode === "edit" ? name || "Кампания без названия" : "Новая кампания"}
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {mode === "edit" ? (
+                <span className={`badge ${isActive ? "badge-success" : "badge-muted"}`}>
+                  {isActive ? "Активна" : "На паузе"}
+                </span>
+              ) : (
+                <span className="page-sub !mt-0">Комментарий под публикацией → сообщение в Direct</span>
+              )}
+              {username && (
+                <span className="chip chip-outline">
+                  <IconInstagram size={12} />@{username}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {importQueue && (
             <button
               type="button"
               onClick={skipRow}
               disabled={saving}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted hover:text-foreground disabled:opacity-50"
+              className="btn btn-ghost"
             >
               {importQueue.length > 1 ? "Пропустить" : "Пропустить и завершить"}
             </button>
@@ -601,7 +692,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                 type="button"
                 onClick={() => handleSubmit(false)}
                 disabled={saving}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted hover:text-foreground disabled:opacity-50"
+                className="btn btn-secondary"
               >
                 Остановить
               </button>
@@ -610,7 +701,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                 type="button"
                 onClick={() => handleSubmit(true)}
                 disabled={saving}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted hover:text-foreground disabled:opacity-50"
+                className="btn btn-secondary"
               >
                 Запустить
               </button>
@@ -619,7 +710,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             type="button"
             onClick={() => handleSubmit(mode === "new" ? true : isActive)}
             disabled={saving}
-            className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            className="btn btn-primary"
           >
             {saving ? "Сохранение…" : mode === "new" ? "Запустить" : "Сохранить изменения"}
           </button>
@@ -628,392 +719,408 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
 
       {/* min-w-0 on the cells: a grid item defaults to min-width:auto, so a
           long string widens the whole page instead of wrapping. */}
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-8">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
       {/* Left: controls */}
-      <div className="space-y-8 min-w-0">
+      <div className="min-w-0 space-y-4">
         {error && (
-          <div className="rounded border border-error/20 bg-error/10 p-3 text-sm text-error">
-            {error}
+          <div className="card flex items-start gap-3 border-error/40 p-4">
+            <span className="icon-tile !h-8 !w-8 !rounded-[9px] icon-tile-error">
+              <IconAlert size={16} />
+            </span>
+            <div>
+              <span className="badge badge-error">Проверьте кампанию</span>
+              <p className="mt-1.5 text-[13px] text-foreground">{error}</p>
+            </div>
           </div>
         )}
 
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-foreground">
-            Название кампании{" "}
-            <span className="font-normal text-muted">(необязательно)</span>
-          </label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Например: Меню по слову МЕНЮ"
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-            maxLength={100}
-          />
+        <Section step={1} title="Основное">
+          <div>
+            <label className="label" htmlFor="campaign-name">
+              Название кампании{" "}
+              <span className="font-normal text-muted">(необязательно)</span>
+            </label>
+            <input
+              id="campaign-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Например: Меню по слову МЕНЮ"
+              className={fieldCls}
+              maxLength={100}
+            />
+            <p className="hint">Видно только вам — в списке кампаний.</p>
+          </div>
           {accounts.length > 1 && (
-            <div className="pt-2">
-              <AccountSelect
-                accounts={accounts}
-                value={selectedAccountId}
-                onChange={(id) => {
-                  setSelectedAccountId(id);
-                  setPostId(null);
-                  setPostUrl(null);
-                  setPostThumb(null);
-                }}
-                includeAll={false}
-                label="Instagram-аккаунт"
-              />
-            </div>
+            <AccountSelect
+              accounts={accounts}
+              value={selectedAccountId}
+              onChange={(id) => {
+                setSelectedAccountId(id);
+                setPostId(null);
+                setPostUrl(null);
+                setPostThumb(null);
+              }}
+              includeAll={false}
+              label="Instagram-аккаунт"
+            />
           )}
-        </div>
-
-        <Section title="Когда кто-то комментирует">
-          <Radio
-            checked={triggerScope === "specific"}
-            onSelect={() => setTriggerScope("specific")}
-          >
-            конкретную публикацию или Reels
-          </Radio>
-          {triggerScope === "specific" && (
-            <div className="rounded-lg border border-border p-2">
-              <PostPicker
-                selectedPostId={postId}
-                instagramAccountId={selectedAccountId}
-                usedPostIds={usedPosts}
-                onSelect={handlePostSelect}
-              />
-            </div>
-          )}
-          <Radio
-            checked={triggerScope === "any"}
-            onSelect={() => setTriggerScope("any")}
-          >
-            любую публикацию или Reels
-          </Radio>
-          <Radio
-            checked={triggerScope === "next"}
-            onSelect={() => setTriggerScope("next")}
-          >
-            следующую публикацию или Reels
-          </Radio>
         </Section>
 
-        <Section title="И в комментарии есть">
-          <Radio
-            checked={matchMode === "specific"}
-            onSelect={() => setMatchMode("specific")}
-          >
-            определённое слово или слова
-          </Radio>
-          {matchMode === "specific" && (
-            <div className="space-y-1">
-              <input
-                value={keywordText}
-                onChange={(e) => setKeywordText(e.target.value)}
-                placeholder="Введите одно или несколько слов"
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-              />
-              <p className="text-xs text-muted">Разделяйте слова запятыми</p>
-            </div>
-          )}
-          <Radio
-            checked={matchMode === "any"}
-            onSelect={() => setMatchMode("any")}
-          >
-            любое слово
-          </Radio>
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
-            <span className="text-sm text-foreground">
-              также отвечать, когда пишут в Direct{" "}
-              {matchMode === "any" ? "что угодно" : "эти слова"}
-            </span>
-            <Toggle
-              on={dmTriggerEnabled}
-              onToggle={() => setDmTriggerEnabled(!dmTriggerEnabled)}
-            />
+        <Section step={2} title="Когда кто-то комментирует">
+          <div role="radiogroup" className="space-y-2">
+            <Radio
+              checked={triggerScope === "specific"}
+              onSelect={() => setTriggerScope("specific")}
+            >
+              конкретную публикацию или Reels
+            </Radio>
+            {triggerScope === "specific" && (
+              <div className="rounded-[10px] border border-border-subtle bg-surface-2 p-2.5">
+                <PostPicker
+                  selectedPostId={postId}
+                  instagramAccountId={selectedAccountId}
+                  usedPostIds={usedPosts}
+                  onSelect={handlePostSelect}
+                />
+              </div>
+            )}
+            <Radio
+              checked={triggerScope === "any"}
+              onSelect={() => setTriggerScope("any")}
+            >
+              любую публикацию или Reels
+            </Radio>
+            <Radio
+              checked={triggerScope === "next"}
+              onSelect={() => setTriggerScope("next")}
+            >
+              следующую публикацию или Reels
+            </Radio>
           </div>
-          {dmTriggerEnabled && (
-            <p className="text-xs text-muted">
+        </Section>
+
+        <Section step={3} title="И в комментарии есть">
+          <div role="radiogroup" className="space-y-2">
+            <Radio
+              checked={matchMode === "specific"}
+              onSelect={() => setMatchMode("specific")}
+            >
+              определённое слово или слова
+            </Radio>
+            {matchMode === "specific" && (
+              <div className="px-0.5 pb-1">
+                <input
+                  value={keywordText}
+                  onChange={(e) => setKeywordText(e.target.value)}
+                  placeholder="Введите одно или несколько слов"
+                  className={fieldCls}
+                />
+                {keywords.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {keywords.map((kw) => (
+                      <span key={kw} className="chip">
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="hint">Разделяйте слова запятыми</p>
+                )}
+              </div>
+            )}
+            <Radio
+              checked={matchMode === "any"}
+              onSelect={() => setMatchMode("any")}
+            >
+              любое слово
+            </Radio>
+          </div>
+
+          <div className="divider !my-4" />
+
+          <ToggleBlock
+            on={dmTriggerEnabled}
+            onToggle={() => setDmTriggerEnabled(!dmTriggerEnabled)}
+            label={
+              <>
+                также отвечать, когда пишут в Direct{" "}
+                {matchMode === "any" ? "что угодно" : "эти слова"}
+              </>
+            }
+          >
+            <p className="hint !mt-0">
               {matchMode === "any"
                 ? "Каждое входящее сообщение в Direct получит ответ ниже — используйте осторожно."
                 : "Сообщение в Direct с любым из этих слов получит тот же ответ — комментарий не нужен."}
             </p>
-          )}
-          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-            <span className="text-sm text-foreground">
-              отвечать на комментарии под публикацией
-            </span>
-            <Toggle
-              on={publicReplyEnabled}
-              onToggle={() => setPublicReplyEnabled(!publicReplyEnabled)}
-            />
-          </div>
-          {publicReplyEnabled && (
-            <div className="space-y-2">
-              {publicReplyMessages.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    value={msg}
-                    onChange={(e) =>
+          </ToggleBlock>
+
+          <ToggleBlock
+            on={publicReplyEnabled}
+            onToggle={() => setPublicReplyEnabled(!publicReplyEnabled)}
+            label="отвечать на комментарии под публикацией"
+          >
+            {publicReplyMessages.map((msg, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={msg}
+                  onChange={(e) =>
+                    setPublicReplyMessages((prev) =>
+                      prev.map((m, idx) => (idx === i ? e.target.value : m))
+                    )
+                  }
+                  placeholder="Ответили в Direct! 📩"
+                  maxLength={1000}
+                  className={fieldCls}
+                />
+                {publicReplyMessages.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
                       setPublicReplyMessages((prev) =>
-                        prev.map((m, idx) => (idx === i ? e.target.value : m))
+                        prev.filter((_, idx) => idx !== i)
                       )
                     }
-                    placeholder="Ответили в Direct! 📩"
-                    maxLength={1000}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                  />
-                  {publicReplyMessages.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPublicReplyMessages((prev) =>
-                          prev.filter((_, idx) => idx !== i)
-                        )
-                      }
-                      className="shrink-0 px-2 text-muted hover:text-error"
-                      aria-label="Удалить ответ"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-              {publicReplyMessages.length < 10 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPublicReplyMessages((prev) => [...prev, ""])
-                  }
-                  className="text-xs font-medium text-accent hover:underline"
-                >
-                  + Добавить ещё ответ
-                </button>
-              )}
-              <p className="text-xs text-muted">
-                Каждый раз выбирается случайный вариант, чтобы ответы не выглядели
-                одинаковыми.
-              </p>
-            </div>
-          )}
+                    className="btn btn-ghost btn-icon shrink-0 hover:!text-error"
+                    aria-label="Удалить ответ"
+                  >
+                    <IconX size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {publicReplyMessages.length < 10 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setPublicReplyMessages((prev) => [...prev, ""])
+                }
+                className="btn btn-ghost btn-sm -ml-2 !text-accent-hi"
+              >
+                <IconPlus size={14} />
+                Добавить ещё ответ
+              </button>
+            )}
+            <p className="hint !mt-0">
+              Каждый раз выбирается случайный вариант, чтобы ответы не выглядели
+              одинаковыми.
+            </p>
+          </ToggleBlock>
         </Section>
 
-        <Section title="Подписчик получит">
-          <div className="rounded-lg border border-border p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">первое сообщение</span>
-              <Toggle
-                on={openingDmEnabled}
-                onToggle={() => setOpeningDmEnabled(!openingDmEnabled)}
-              />
-            </div>
-            {openingDmEnabled && (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={openingDmMessage}
-                  onChange={(e) => setOpeningDmMessage(e.target.value)}
-                  placeholder="Здравствуйте! Рады, что вы с нами 😊"
-                  rows={3}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
-                  maxLength={1000}
-                />
-                <input
-                  value={openingDmButtonLabel}
-                  onChange={(e) => setOpeningDmButtonLabel(e.target.value)}
-                  placeholder="Получить ссылку"
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                  maxLength={64}
-                />
-              </div>
-            )}
-          </div>
-          <div className="mt-3 rounded-lg border border-border p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">
-                сначала проверку подписки
-              </span>
-              <Toggle
-                on={requireFollow}
-                onToggle={() => setRequireFollow(!requireFollow)}
-              />
-            </div>
-            {requireFollow && (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={followPromptMessage}
-                  onChange={(e) => setFollowPromptMessage(e.target.value)}
-                  placeholder="Небольшая просьба перед тем, как отправлю ссылку: подпишитесь на нас, чтобы не пропустить новинки. Нажмите кнопку, когда подпишетесь, — и я сразу всё пришлю"
-                  rows={3}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
-                  maxLength={1000}
-                />
-                <input
-                  value={followPromptButtonLabel}
-                  onChange={(e) => setFollowPromptButtonLabel(e.target.value)}
-                  placeholder="Я подписан(а)"
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                  maxLength={20}
-                />
-                <p className="text-xs text-muted">
-                  Ссылка отправляется после нажатия кнопки, когда Instagram
-                  подтвердит подписку. Если проверить не удалось, ссылка всё равно
-                  уходит.
-                </p>
-              </div>
-            )}
-          </div>
-        </Section>
-
-        <Section title="А затем получит">
-          <div className="rounded-lg border border-border p-3 space-y-2">
-            <span className="text-sm text-foreground">сообщение в Direct со ссылкой</span>
+        <Section step={4} title="Подписчик получит">
+          <ToggleBlock
+            on={openingDmEnabled}
+            onToggle={() => setOpeningDmEnabled(!openingDmEnabled)}
+            label="первое сообщение"
+          >
             <textarea
+              value={openingDmMessage}
+              onChange={(e) => setOpeningDmMessage(e.target.value)}
+              placeholder="Здравствуйте! Рады, что вы с нами 😊"
+              rows={3}
+              className={areaCls}
+              maxLength={1000}
+            />
+            <input
+              value={openingDmButtonLabel}
+              onChange={(e) => setOpeningDmButtonLabel(e.target.value)}
+              placeholder="Получить ссылку"
+              className={fieldCls}
+              maxLength={64}
+            />
+            <p className="hint !mt-0">Подпись кнопки под первым сообщением.</p>
+          </ToggleBlock>
+          <ToggleBlock
+            on={requireFollow}
+            onToggle={() => setRequireFollow(!requireFollow)}
+            label="сначала проверку подписки"
+          >
+            <textarea
+              value={followPromptMessage}
+              onChange={(e) => setFollowPromptMessage(e.target.value)}
+              placeholder="Небольшая просьба перед тем, как отправлю ссылку: подпишитесь на нас, чтобы не пропустить новинки. Нажмите кнопку, когда подпишетесь, — и я сразу всё пришлю"
+              rows={3}
+              className={areaCls}
+              maxLength={1000}
+            />
+            <input
+              value={followPromptButtonLabel}
+              onChange={(e) => setFollowPromptButtonLabel(e.target.value)}
+              placeholder="Я подписан(а)"
+              className={fieldCls}
+              maxLength={20}
+            />
+            <p className="hint !mt-0">
+              Ссылка отправляется после нажатия кнопки, когда Instagram
+              подтвердит подписку. Если проверить не удалось, ссылка всё равно
+              уходит.
+            </p>
+          </ToggleBlock>
+        </Section>
+
+        <Section step={5} title="А затем получит">
+          <div className="rounded-[10px] border border-border bg-surface p-3">
+            <label className="label" htmlFor="campaign-dm">
+              сообщение в Direct со ссылкой
+            </label>
+            <textarea
+              id="campaign-dm"
               value={dmMessage}
               onChange={(e) => setDmMessage(e.target.value)}
               placeholder="Напишите сообщение"
               rows={3}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
+              className={areaCls}
               maxLength={1000}
             />
-            {linkOpen ? (
-              <div className="space-y-2">
-                <input
-                  value={trackedDestinationUrl}
-                  onChange={(e) => setTrackedDestinationUrl(e.target.value)}
-                  onBlur={ensureLinkToken}
-                  placeholder="https://vash-sait.ru/predlozhenie"
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                />
-                <input
-                  value={linkButtonLabel}
-                  onChange={(e) => setLinkButtonLabel(e.target.value)}
-                  placeholder="Подпись кнопки (например: Открыть ссылку)"
-                  maxLength={20}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                />
-                {secondLinkOpen ? (
-                  <div className="space-y-2 border-t border-border pt-2">
-                    <input
-                      value={secondaryDestinationUrl}
-                      onChange={(e) => setSecondaryDestinationUrl(e.target.value)}
-                      placeholder="https://vash-sait.ru/vtoraya"
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                    />
-                    <input
-                      value={secondaryButtonLabel}
-                      onChange={(e) => setSecondaryButtonLabel(e.target.value)}
-                      placeholder="Подпись второй кнопки"
-                      maxLength={20}
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                    />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setSecondLinkOpen(true)}
-                    className="w-full rounded-lg border border-border py-2 text-sm text-muted hover:text-foreground"
-                  >
-                    + Добавить вторую ссылку
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setLinkOpen(true)}
-                className="w-full rounded-lg border border-border py-2 text-sm text-muted hover:text-foreground"
-              >
-                + Добавить ссылку
-              </button>
-            )}
-            <p className="text-xs text-muted">
-              {"{link}"} подставляет отслеживаемую ссылку, {"{username}"} — имя подписчика.
+            <div className="mt-2 space-y-2">
+              {linkOpen ? (
+                <>
+                  <input
+                    value={trackedDestinationUrl}
+                    onChange={(e) => setTrackedDestinationUrl(e.target.value)}
+                    onBlur={ensureLinkToken}
+                    placeholder="https://vash-sait.ru/predlozhenie"
+                    className={fieldCls}
+                  />
+                  <input
+                    value={linkButtonLabel}
+                    onChange={(e) => setLinkButtonLabel(e.target.value)}
+                    placeholder="Подпись кнопки (например: Открыть ссылку)"
+                    maxLength={20}
+                    className={fieldCls}
+                  />
+                  {secondLinkOpen ? (
+                    <div className="space-y-2 border-t border-border-subtle pt-2">
+                      <input
+                        value={secondaryDestinationUrl}
+                        onChange={(e) => setSecondaryDestinationUrl(e.target.value)}
+                        placeholder="https://vash-sait.ru/vtoraya"
+                        className={fieldCls}
+                      />
+                      <input
+                        value={secondaryButtonLabel}
+                        onChange={(e) => setSecondaryButtonLabel(e.target.value)}
+                        placeholder="Подпись второй кнопки"
+                        maxLength={20}
+                        className={fieldCls}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSecondLinkOpen(true)}
+                      className="btn btn-secondary btn-sm w-full"
+                    >
+                      <IconPlus size={14} />
+                      Добавить вторую ссылку
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setLinkOpen(true)}
+                  className="btn btn-secondary btn-sm w-full"
+                >
+                  <IconPlus size={14} />
+                  Добавить ссылку
+                </button>
+              )}
+            </div>
+            <p className="hint">
+              <code className="font-mono text-accent-hi">{"{link}"}</code> подставляет
+              отслеживаемую ссылку,{" "}
+              <code className="font-mono text-accent-hi">{"{username}"}</code> — имя
+              подписчика.
             </p>
           </div>
-          <div className="mt-3 rounded-lg border border-border p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">
-                напоминание с благодарностью
-              </span>
-              <Toggle
-                on={followUpEnabled}
-                onToggle={() => setFollowUpEnabled(!followUpEnabled)}
+          <ToggleBlock
+            on={followUpEnabled}
+            onToggle={() => setFollowUpEnabled(!followUpEnabled)}
+            label="напоминание с благодарностью"
+          >
+            <textarea
+              value={followUpMessage}
+              onChange={(e) => setFollowUpMessage(e.target.value)}
+              placeholder="Кстати, спасибо за подписку — очень ценим вашу поддержку 🙌"
+              rows={3}
+              className={areaCls}
+              maxLength={1000}
+            />
+            <div className="flex flex-wrap items-center gap-2 text-[13px] text-foreground">
+              <span className="text-muted">Отправить через</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={1440}
+                value={followUpDelayMinutes}
+                onChange={(e) =>
+                  setFollowUpDelayMinutes(
+                    Math.max(0, Math.min(1440, Math.floor(Number(e.target.value) || 0)))
+                  )
+                }
+                className="input !h-9 w-24 !px-2.5 text-center tabular-nums"
               />
+              <span className="text-muted">мин после ссылки</span>
             </div>
-            {followUpEnabled && (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={followUpMessage}
-                  onChange={(e) => setFollowUpMessage(e.target.value)}
-                  placeholder="Кстати, спасибо за подписку — очень ценим вашу поддержку 🙌"
-                  rows={3}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
-                  maxLength={1000}
-                />
-                <div className="flex flex-wrap items-center gap-2 text-sm text-foreground">
-                  <span className="text-xs text-muted">Отправить через</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={1440}
-                    value={followUpDelayMinutes}
-                    onChange={(e) =>
-                      setFollowUpDelayMinutes(
-                        Math.max(0, Math.min(1440, Math.floor(Number(e.target.value) || 0)))
-                      )
-                    }
-                    className="w-20 rounded-lg border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-accent/40 focus:outline-none"
-                  />
-                  <span className="text-xs text-muted">
-                    мин после ссылки
-                  </span>
-                </div>
-                <p className="text-xs text-muted">
-                  {followUpDelayMinutes > 0
-                    ? `Уйдёт через ${followUpDelayMinutes} мин после перехода по ссылке.`
-                    : "Уйдёт сразу после перехода по ссылке."}
-                  {" {username}"} подставит имя. Максимум 24 часа — таково окно
-                  переписки Instagram.
-                </p>
-              </div>
-            )}
-          </div>
+            <p className="hint !mt-0">
+              {followUpDelayMinutes > 0
+                ? `Уйдёт через ${followUpDelayMinutes} мин после перехода по ссылке.`
+                : "Уйдёт сразу после перехода по ссылке."}
+              {" {username}"} подставит имя. Максимум 24 часа — таково окно
+              переписки Instagram.
+            </p>
+          </ToggleBlock>
         </Section>
       </div>
 
       {/* Right: preview */}
-      <div>
-        <p className="mb-4 text-sm text-muted">Предпросмотр</p>
-        <div className="flex min-w-0 justify-center lg:sticky lg:top-6 lg:block">
-          <CampaignPreview
-            tab={previewTab}
-            onTabChange={setPreviewTab}
-            username={username}
-            avatarUrl={avatarUrl}
-            postThumb={postThumb}
-            caption={postCaption}
-            sampleComment={keywords[0] ?? ""}
-            dmTriggerEnabled={dmTriggerEnabled}
-            publicReplyEnabled={publicReplyEnabled}
-            publicReplyMessage={publicReplyMessages.find((m) => m.trim()) ?? ""}
-            openingDmEnabled={openingDmEnabled}
-            openingDmMessage={openingDmMessage}
-            openingDmButtonLabel={openingDmButtonLabel}
-            revealMessage={dmMessage}
-            hasLink={Boolean(trackedDestinationUrl.trim())}
-            linkButtonLabel={linkButtonLabel || "Открыть ссылку"}
-            linkUrl={trackedDestinationUrl.trim() || undefined}
-            hasSecondLink={
-              secondLinkOpen && Boolean(secondaryDestinationUrl.trim())
-            }
-            secondLinkButtonLabel={secondaryButtonLabel || "Открыть ссылку"}
-            requireFollow={requireFollow}
-            followPromptMessage={followPromptMessage}
-            followPromptButtonLabel={followPromptButtonLabel || "Я подписан(а)"}
-            followUpEnabled={followUpEnabled}
-            followUpMessage={followUpMessage}
-            followUpDelayMinutes={followUpDelayMinutes}
-          />
+      <div className="min-w-0">
+        <div className="lg:sticky lg:top-6 lg:max-h-[calc(100dvh-6.5rem)] lg:overflow-y-auto lg:rounded-[14px]">
+          <div className="card">
+            <div className="card-head !py-3.5">
+              <div className="flex items-center gap-3">
+                <span className="icon-tile !h-7 !w-7 !rounded-[8px]">
+                  <IconInstagram size={14} />
+                </span>
+                <span className="card-title">Предпросмотр</span>
+              </div>
+              <span className="text-[12px] text-muted">Обновляется сразу</span>
+            </div>
+            <div className="card-body flex justify-center !px-4 !py-6">
+              <CampaignPreview
+                tab={previewTab}
+                onTabChange={setPreviewTab}
+                username={username}
+                avatarUrl={avatarUrl}
+                postThumb={postThumb}
+                caption={postCaption}
+                sampleComment={keywords[0] ?? ""}
+                dmTriggerEnabled={dmTriggerEnabled}
+                publicReplyEnabled={publicReplyEnabled}
+                publicReplyMessage={publicReplyMessages.find((m) => m.trim()) ?? ""}
+                openingDmEnabled={openingDmEnabled}
+                openingDmMessage={openingDmMessage}
+                openingDmButtonLabel={openingDmButtonLabel}
+                revealMessage={dmMessage}
+                hasLink={Boolean(trackedDestinationUrl.trim())}
+                linkButtonLabel={linkButtonLabel || "Открыть ссылку"}
+                linkUrl={trackedDestinationUrl.trim() || undefined}
+                hasSecondLink={
+                  secondLinkOpen && Boolean(secondaryDestinationUrl.trim())
+                }
+                secondLinkButtonLabel={secondaryButtonLabel || "Открыть ссылку"}
+                requireFollow={requireFollow}
+                followPromptMessage={followPromptMessage}
+                followPromptButtonLabel={followPromptButtonLabel || "Я подписан(а)"}
+                followUpEnabled={followUpEnabled}
+                followUpMessage={followUpMessage}
+                followUpDelayMinutes={followUpDelayMinutes}
+              />
+            </div>
+          </div>
         </div>
       </div>
       </div>

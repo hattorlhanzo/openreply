@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
     });
 
     dailyDMs.push({
-      date: dayStart.toLocaleDateString("en-US", { weekday: "short" }),
+      date: dayStart.toISOString(),
       count,
     });
   }

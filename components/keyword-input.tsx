@@ -7,6 +7,7 @@
  */
 
 import { useState, type KeyboardEvent } from "react";
+import { IconX } from "@/components/ui/icons";
 
 interface KeywordInputProps {
   keywords: string[];
@@ -41,21 +42,19 @@ export default function KeywordInput({ keywords, onChange, max = 10 }: KeywordIn
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2 p-3 rounded bg-surface border border-border min-h-[48px]">
+    <div>
+      {/* The wrapper is the visual field; the real input inside is borderless. */}
+      <div className="input flex !h-auto min-h-[44px] flex-wrap items-center gap-1.5 !py-1.5 focus-within:!border-accent">
         {keywords.map((keyword) => (
-          <span
-            key={keyword}
-            className="inline-flex items-center gap-2 px-2 py-1 rounded border border-border text-xs"
-          >
+          <span key={keyword} className="chip !pr-1">
             {keyword}
             <button
               type="button"
               onClick={() => removeKeyword(keyword)}
               aria-label={`Удалить ${keyword}`}
-              className="text-muted hover:text-error"
+              className="grid h-4 w-4 place-items-center rounded-[4px] text-accent-hi hover:bg-accent hover:text-white"
             >
-              Удалить
+              <IconX size={11} />
             </button>
           </span>
         ))}
@@ -65,10 +64,10 @@ export default function KeywordInput({ keywords, onChange, max = 10 }: KeywordIn
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={keywords.length === 0 ? "Введите ключевое слово и нажмите Enter…" : ""}
-          className="flex-1 min-w-[120px] bg-transparent text-sm text-foreground placeholder:text-zinc-500 outline-none"
+          className="min-w-[120px] flex-1 bg-transparent text-[14px] text-foreground outline-none placeholder:text-[var(--text-4)]"
         />
       </div>
-      <p className="text-xs text-muted">
+      <p className="hint tabular-nums">
         {keywords.length}/{max} ключевых слов · Enter или запятая — добавить
       </p>
     </div>

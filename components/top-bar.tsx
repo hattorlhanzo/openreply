@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Верхняя панель
- *
- * Заголовок страницы, кнопка меню на мобильных и статус подключения.
+ * Верхняя панель: заголовок страницы, кнопка меню на телефоне,
+ * подключённый Instagram-аккаунт.
  */
 
 import { usePathname } from "next/navigation";
 import { NAV, pluralRu } from "@/lib/i18n/common";
+import { IconInstagram, IconMenu } from "@/components/ui/icons";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": NAV.dashboard,
@@ -15,6 +15,7 @@ const pageTitles: Record<string, string> = {
   "/inbox": NAV.inbox,
   "/campaigns": NAV.campaigns,
   "/campaigns/new": "Новая кампания",
+  "/campaigns/import": "Импорт кампаний",
   "/automations": NAV.campaigns,
   "/automations/new": "Новая кампания",
   "/logs": NAV.logs,
@@ -34,42 +35,44 @@ export default function TopBar({
   instagramAccountCount,
 }: TopBarProps) {
   const pathname = usePathname();
-  const title = pageTitles[pathname] ?? NAV.dashboard;
+  const title =
+    pageTitles[pathname] ??
+    (pathname.startsWith("/campaigns/") ? "Кампания" : NAV.dashboard);
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 lg:px-8 border-b border-border bg-background"
-      // Installed to the home screen the app starts at the very top of the
-      // display, so without this the title sits under the clock and battery.
-      // The inset is 0 in a browser tab and on desktop.
+      className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 lg:px-8 border-b border-border-subtle bg-background"
       style={{
-        height: "calc(4rem + env(safe-area-inset-top))",
+        height: "calc(3.75rem + env(safe-area-inset-top))",
         paddingTop: "env(safe-area-inset-top)",
       }}
     >
-      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+      <div className="flex min-w-0 items-center gap-3">
         <button
           onClick={onMenuClick}
-          className="lg:hidden shrink-0 px-2.5 py-1.5 rounded border border-border text-sm text-muted hover:text-foreground"
-          aria-label="Открыть меню"
+          className="btn btn-ghost btn-icon lg:hidden"
+          aria-label="Меню"
         >
-          Меню
+          <IconMenu size={20} />
         </button>
-        <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
+        <h1 className="truncate text-[15px] font-semibold text-foreground">{title}</h1>
       </div>
 
       {instagramAccountCount > 0 ? (
-        <p className="shrink-0 truncate text-sm text-muted">
-          {instagramAccountCount > 1
-            ? `${instagramAccountCount} ${pluralRu(instagramAccountCount, ["аккаунт", "аккаунта", "аккаунтов"])}`
-            : `@${instagramUsername}`}
-        </p>
+        <span className="badge badge-plain badge-muted h-8 gap-2 pl-2 pr-3 text-[13px]">
+          <span className="icon-tile !h-5 !w-5 !rounded-md">
+            <IconInstagram size={12} />
+          </span>
+          <span className="truncate">
+            {instagramAccountCount > 1
+              ? `${instagramAccountCount} ${pluralRu(instagramAccountCount, ["аккаунт", "аккаунта", "аккаунтов"])}`
+              : `@${instagramUsername}`}
+          </span>
+          <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+        </span>
       ) : (
-        <a
-          href="/api/instagram/connect"
-          className="shrink-0 whitespace-nowrap text-sm font-medium px-3 py-1.5 rounded bg-accent text-white hover:bg-accent-hover"
-        >
-          {/* Full label needs more room than a 360px header has to spare. */}
+        <a href="/api/instagram/connect" className="btn btn-primary btn-sm">
+          <IconInstagram size={16} />
           <span className="sm:hidden">Подключить</span>
           <span className="hidden sm:inline">Подключить Instagram</span>
         </a>

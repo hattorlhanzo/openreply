@@ -13,7 +13,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { readCache, writeCache } from "@/lib/client-cache";
-import { API_ERRORS, NAV } from "@/lib/i18n/common";
+import { API_ERRORS, NAV, pluralRu } from "@/lib/i18n/common";
+import {
+  IconAlert,
+  IconChevronLeft,
+  IconMessage,
+  IconSend,
+} from "@/components/ui/icons";
 import type { ConversationListItem } from "@/app/api/instagram/conversations/route";
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
 
@@ -34,6 +40,11 @@ function formatTime(iso: string | null): string {
   return sameDay
     ? d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
     : d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
+function initialOf(username: string | null): string {
+  const ch = (username ?? "").trim().charAt(0);
+  return ch ? ch.toUpperCase() : "?";
 }
 
 export default function InboxPage() {
@@ -58,6 +69,9 @@ export default function InboxPage() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Counter for optimistic message ids (a ref, not Date.now(): the React
+  // compiler lint forbids impure calls inside component scope).
+  const optimisticSeq = useRef(0);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 
@@ -212,7 +226,7 @@ export default function InboxPage() {
 
     // Optimistically show the reply immediately, then confirm with the server.
     const optimistic: ThreadMessage = {
-      id: `optimistic-${Date.now()}`,
+      id: `optimistic-${++optimisticSeq.current}`,
       text,
       fromMe: true,
       fromUsername: null,
@@ -257,10 +271,27 @@ export default function InboxPage() {
     }
   }
 
+  const convCount = conversations.length;
+  const subtitle = convLoading
+    ? "Загружаем диалоги…"
+    : convError
+      ? "Не удалось загрузить диалоги"
+      : convCount === 0
+        ? "Диалогов пока нет"
+        : `${convCount} ${pluralRu(convCount, ["диалог", "диалога", "диалогов"])}`;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between gap-4">
-        <h1 className="text-lg font-semibold text-foreground">{NAV.inbox}</h1>
+    <div>
+      <div className="page-head">
+        <div className="min-w-0">
+          <h1 className="page-title">{NAV.inbox}</h1>
+          <p className="page-sub tabular-nums">{subtitle}</p>
+          {convError && !convLoading && (
+            <p className="mt-1 max-w-2xl break-words text-[12px] leading-relaxed text-muted">
+              {convError}
+            </p>
+          )}
+        </div>
         {accounts.length > 1 && (
           <AccountSelect
             accounts={accounts}
@@ -271,24 +302,52 @@ export default function InboxPage() {
         )}
       </div>
 
-      <div className="grid h-[calc(100dvh-11rem)] grid-cols-1 overflow-hidden rounded border border-border sm:grid-cols-[300px_1fr]">
+      <div className="card grid h-[calc(100dvh-14.5rem)] min-h-[420px] grid-cols-1 overflow-hidden sm:grid-cols-[320px_1fr]">
         {/* Conversation list. On mobile it takes the full pane and is hidden
             once a thread is open (ManyChat-style); on sm+ it is always shown. */}
         <div
-          className={`min-h-0 flex-col border-b border-border sm:flex sm:border-b-0 sm:border-r ${
+          className={`min-h-0 flex-col border-b border-border-subtle sm:flex sm:border-b-0 sm:border-r ${
             active ? "hidden" : "flex"
           }`}
         >
-          <div className="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
-            Диалоги
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border-subtle px-4">
+            <span className="card-title">Диалоги</span>
+            {!convLoading && !convError && convCount > 0 && (
+              <span className="badge badge-plain badge-muted tabular-nums">{convCount}</span>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {convLoading ? (
-              <p className="px-4 py-6 text-sm text-muted">Загрузка…</p>
+              <div className="space-y-1 p-2">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-2 py-2.5">
+                    <span className="skeleton h-8 w-8 shrink-0 !rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <span className="skeleton block h-3 w-24" />
+                      <span className="skeleton block h-3 w-40" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : convError ? (
-              <p className="px-4 py-6 text-sm text-error">{convError}</p>
+              <div className="empty h-full">
+                <span className="empty-icon">
+                  <IconAlert size={22} />
+                </span>
+                <p className="empty-title">Диалоги недоступны</p>
+                <p className="text-[13px]">
+                  Instagram не ответил на запрос. Проверьте подключение аккаунта в
+                  настройках и попробуйте позже.
+                </p>
+              </div>
             ) : conversations.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-muted">Диалогов пока нет.</p>
+              <div className="empty h-full">
+                <span className="empty-icon">
+                  <IconMessage size={22} />
+                </span>
+                <p className="empty-title">Диалогов пока нет</p>
+                <p className="text-[13px]">Сообщения подписчиков появятся здесь.</p>
+              </div>
             ) : (
               conversations.map((c) => {
                 const isActive = c.id === activeId;
@@ -297,24 +356,31 @@ export default function InboxPage() {
                     key={c.id}
                     type="button"
                     onClick={() => openConversation(c.id)}
-                    className={`block w-full border-b border-border px-4 py-3 text-left ${
+                    aria-current={isActive ? "true" : undefined}
+                    className={`relative flex w-full items-start gap-3 border-b border-border-subtle px-4 py-3 text-left transition-colors ${
                       isActive ? "bg-surface-hover" : "hover:bg-surface-hover"
                     }`}
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
-                        @{c.contact.username ?? "неизвестно"}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-zinc-500">
-                        {formatTime(c.updatedTime)}
-                      </span>
-                    </div>
-                    {c.lastMessage && (
-                      <p className="mt-0.5 truncate text-xs text-muted">
-                        {c.lastMessage.fromMe ? "Вы: " : ""}
-                        {c.lastMessage.text || "(без текста)"}
-                      </p>
+                    {isActive && (
+                      <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-full bg-accent" />
                     )}
+                    <span className="avatar mt-0.5">{initialOf(c.contact.username)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-[14px] font-semibold text-foreground">
+                          @{c.contact.username ?? "неизвестно"}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted tabular-nums">
+                          {formatTime(c.updatedTime)}
+                        </span>
+                      </span>
+                      {c.lastMessage && (
+                        <span className="mt-0.5 block truncate text-[13px] text-muted">
+                          {c.lastMessage.fromMe ? "Вы: " : ""}
+                          {c.lastMessage.text || "(без текста)"}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 );
               })
@@ -325,33 +391,55 @@ export default function InboxPage() {
         {/* Thread. On mobile it is only shown once a conversation is open and
             fills the pane; on sm+ it always sits beside the list. */}
         <div
-          className={`min-h-0 flex-col ${active ? "flex" : "hidden sm:flex"}`}
+          className={`min-h-0 flex-col bg-surface-2/40 ${active ? "flex" : "hidden sm:flex"}`}
         >
           {!active ? (
-            <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted">
-              Выберите диалог, чтобы прочитать и ответить.
+            <div className="empty flex-1">
+              <span className="empty-icon">
+                <IconMessage size={22} />
+              </span>
+              <p className="empty-title">
+                {convError ? "Переписка недоступна" : "Выберите диалог"}
+              </p>
+              <p className="max-w-xs text-[13px]">
+                {convError
+                  ? "Когда подключение к Instagram восстановится, диалоги появятся слева."
+                  : "Откройте диалог слева, чтобы прочитать сообщения и ответить."}
+              </p>
             </div>
           ) : (
             <>
-              <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border-subtle bg-surface px-3 sm:px-4">
                 <button
                   type="button"
                   onClick={() => setActiveId(null)}
-                  className="-ml-1 rounded px-2 py-1 text-muted hover:text-foreground sm:hidden"
+                  className="btn btn-ghost btn-icon btn-sm sm:hidden"
                   aria-label="Назад к диалогам"
                 >
-                  Назад
+                  <IconChevronLeft size={18} />
                 </button>
-                <span className="truncate">
+                <span className="avatar !h-7 !w-7 !text-[11px]">
+                  {initialOf(active.contact.username)}
+                </span>
+                <span className="truncate text-[14px] font-semibold text-foreground">
                   @{active.contact.username ?? "неизвестно"}
                 </span>
               </div>
 
               <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
                 {threadLoading && messages.length === 0 ? (
-                  <p className="text-sm text-muted">Загрузка…</p>
+                  <div className="space-y-3">
+                    <span className="skeleton block h-10 w-2/5" />
+                    <span className="skeleton ml-auto block h-10 w-1/3" />
+                    <span className="skeleton block h-10 w-1/2" />
+                  </div>
                 ) : messages.length === 0 ? (
-                  <p className="text-sm text-muted">Сообщений нет.</p>
+                  <div className="empty h-full">
+                    <span className="empty-icon">
+                      <IconMessage size={22} />
+                    </span>
+                    <p className="empty-title">Сообщений нет</p>
+                  </div>
                 ) : (
                   messages.map((m) => (
                     <div
@@ -359,16 +447,16 @@ export default function InboxPage() {
                       className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
+                        className={`max-w-[75%] rounded-[14px] px-3.5 py-2 text-[14px] leading-relaxed ${
                           m.fromMe
-                            ? "bg-accent text-white"
-                            : "bg-surface text-foreground border border-border"
+                            ? "rounded-br-[4px] bg-accent text-white"
+                            : "rounded-bl-[4px] border border-border-subtle bg-surface text-foreground"
                         }`}
                       >
                         <p className="whitespace-pre-wrap break-words">{m.text}</p>
                         <p
-                          className={`mt-1 text-[10px] ${
-                            m.fromMe ? "text-white/70" : "text-zinc-500"
+                          className={`mt-1 text-right text-[10px] tabular-nums ${
+                            m.fromMe ? "text-white/70" : "text-muted"
                           }`}
                         >
                           {formatTime(m.createdTime)}
@@ -379,9 +467,12 @@ export default function InboxPage() {
                 )}
               </div>
 
-              <div className="shrink-0 border-t border-border p-3">
+              <div className="shrink-0 border-t border-border-subtle bg-surface p-3">
                 {sendError && (
-                  <p className="mb-2 text-xs text-error">{sendError}</p>
+                  <p className="mb-2 flex items-start gap-1.5 text-[12px] text-error">
+                    <IconAlert size={14} className="mt-0.5 shrink-0" />
+                    <span className="break-words">{sendError}</span>
+                  </p>
                 )}
                 <div className="flex items-end gap-2">
                   <textarea
@@ -390,14 +481,15 @@ export default function InboxPage() {
                     onKeyDown={handleKeyDown}
                     rows={1}
                     placeholder="Напишите ответ…  (Enter — отправить, Shift+Enter — новая строка)"
-                    className="max-h-32 min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                    className="textarea max-h-32 !min-h-[40px] flex-1 !py-2.5 resize-none"
                   />
                   <button
                     type="button"
                     onClick={() => void handleSend()}
                     disabled={sending || !draft.trim()}
-                    className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                    className="btn btn-primary"
                   >
+                    <IconSend size={16} />
                     {sending ? "Отправка…" : "Отправить"}
                   </button>
                 </div>

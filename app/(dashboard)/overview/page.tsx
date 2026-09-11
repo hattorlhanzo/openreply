@@ -19,6 +19,18 @@ import {
   formatNumberRu,
   pluralRu,
 } from "@/lib/i18n/common";
+import {
+  IconActivity,
+  IconAlert,
+  IconInbox,
+  IconInstagram,
+  IconLink,
+  IconMessage,
+  IconRefresh,
+  IconTarget,
+  IconTrendUp,
+  IconUsers,
+} from "@/components/ui/icons";
 
 function formatNumber(n: number | null): string {
   if (n === null) return "—";
@@ -83,29 +95,68 @@ export default function OverviewPage() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="panel rounded p-4 h-24 sm:p-5">
-            <div className="h-4 w-16 bg-zinc-200 rounded" />
-            <div className="mt-3 h-6 w-20 bg-zinc-200/60 rounded" />
+      <div className="space-y-6">
+        <div className="card p-5">
+          <div className="flex items-center gap-4">
+            <div className="skeleton h-14 w-14 !rounded-full" />
+            <div>
+              <div className="skeleton h-5 w-40" />
+              <div className="skeleton mt-2 h-4 w-56" />
+            </div>
           </div>
-        ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="card p-4 sm:p-5">
+              <div className="flex items-start justify-between">
+                <div className="skeleton h-4 w-20" />
+                <div className="skeleton h-8 w-8 !rounded-[9px]" />
+              </div>
+              <div className="skeleton mt-3 h-7 w-16" />
+            </div>
+          ))}
+        </div>
+        <div className="card h-72" />
       </div>
     );
   }
 
   if (error) {
+    const needsConnect = error.includes("connect") || error.includes("подключ");
     return (
-      <div className="panel rounded p-8 text-center">
-        <p className="text-sm text-error">{error}</p>
-        {(error.includes("connect") || error.includes("подключ")) && (
-          <a
-            href="/api/instagram/connect"
-            className="mt-4 inline-block text-sm text-accent hover:underline"
-          >
-            Подключить Instagram
-          </a>
-        )}
+      <div className="space-y-6">
+        <div className="page-head">
+          <div>
+            <h1 className="page-title">Аккаунт</h1>
+            <p className="page-sub">Статистика подключённого Instagram-аккаунта</p>
+          </div>
+        </div>
+        <div className="card">
+          <div className="empty py-14">
+            <span className="empty-icon icon-tile-error">
+              <IconAlert size={22} />
+            </span>
+            <p className="empty-title">Данные аккаунта недоступны</p>
+            <p className="max-w-sm text-[13px]">{error}</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {needsConnect ? (
+                <a href="/api/instagram/connect" className="btn btn-primary">
+                  <IconInstagram size={16} />
+                  Подключить Instagram
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => window.location.reload()}
+                >
+                  <IconRefresh size={16} />
+                  Обновить
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -114,158 +165,220 @@ export default function OverviewPage() {
 
   const { totals, posts, accounts, insightsAvailable, followers, followerHistory } =
     data;
+  const initial = data.account.username.charAt(0).toUpperCase();
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-foreground">Аккаунт</h1>
-          <p className="text-sm text-muted mt-1">
-            {data.requestedCount === "all" ? "За всё время" : "Недавние"} —{" "}
-            {totals.posts}{" "}
-            {pluralRu(totals.posts, ["публикация", "публикации", "публикаций"])} @
-            {data.account.username}
-            {data.truncated ? ` (не больше ${totals.posts})` : ""}
-          </p>
-          {followers !== null && (
-            // Kept out of the tile row below: that row sums the selected posts,
-            // whereas this is a current account-level total.
-            <p className="mt-1 text-sm text-muted">
-              {formatNumberRu(followers)}{" "}
-              {pluralRu(followers, ["подписчик", "подписчика", "подписчиков"])}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-          <label className="flex flex-col gap-2 text-sm">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Период
-            </span>
-            <select
-              value={count}
-              onChange={(e) => handleCountChange(e.target.value)}
-              className="border-0 bg-transparent py-2 pr-1 text-sm text-foreground outline-none"
-            >
-              {COUNT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {accounts.length > 1 && (
-            <AccountSelect
-              accounts={accounts.map((a) => ({
-                id: a.id,
-                username: a.username,
-                instagramId: a.id,
-              }))}
-              value={selectedAccountId}
-              onChange={handleAccountChange}
-            />
-          )}
+    <div className="space-y-6">
+      {/* Шапка профиля */}
+      <div className="card">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="avatar !h-14 !w-14 !text-[20px]">{initial}</span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-[18px] font-bold tracking-tight text-foreground">
+                  @{data.account.username}
+                </h1>
+                <span className="badge badge-success">Подключено</span>
+              </div>
+              <p className="mt-0.5 text-[13px] text-muted">
+                {followers !== null && (
+                  // Kept out of the tile row below: that row sums the selected posts,
+                  // whereas this is a current account-level total.
+                  <>
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {formatNumberRu(followers)}
+                    </span>{" "}
+                    {pluralRu(followers, ["подписчик", "подписчика", "подписчиков"])}
+                    {" · "}
+                  </>
+                )}
+                {data.requestedCount === "all" ? "за всё время" : "недавние"} —{" "}
+                <span className="tabular-nums">{totals.posts}</span>{" "}
+                {pluralRu(totals.posts, ["публикация", "публикации", "публикаций"])}
+                {data.truncated ? ` (не больше ${totals.posts})` : ""}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="mb-1.5 block text-[12px] font-semibold text-muted">Период</span>
+              <select
+                value={count}
+                onChange={(e) => handleCountChange(e.target.value)}
+                className="select !h-9 min-w-44 text-[13px]"
+              >
+                {COUNT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {accounts.length > 1 && (
+              <AccountSelect
+                accounts={accounts.map((a) => ({
+                  id: a.id,
+                  username: a.username,
+                  instagramId: a.id,
+                }))}
+                value={selectedAccountId}
+                onChange={handleAccountChange}
+                compact
+              />
+            )}
+          </div>
         </div>
       </div>
 
       {!insightsAvailable && (
-        <div className="panel rounded p-4 border border-border">
-          <p className="text-sm text-foreground">
-            Для просмотров, охвата, сохранений и репостов нужно разрешение на
-            статистику.
-          </p>
-          <p className="text-sm text-muted mt-1">
-            Переподключите аккаунт, чтобы выдать его, — пока показываем лайки и
-            комментарии.
-          </p>
-          <a
-            href="/api/instagram/connect"
-            className="mt-3 inline-block text-sm text-accent hover:underline"
-          >
-            Переподключить Instagram
-          </a>
+        <div className="card">
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
+            <span className="icon-tile icon-tile-warning">
+              <IconAlert size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-foreground">
+                Для просмотров, охвата, сохранений и репостов нужно разрешение на
+                статистику.
+              </p>
+              <p className="mt-0.5 text-[13px] text-muted">
+                Переподключите аккаунт, чтобы выдать его, — пока показываем лайки и
+                комментарии.
+              </p>
+            </div>
+            <a href="/api/instagram/connect" className="btn btn-secondary btn-sm shrink-0">
+              <IconInstagram size={15} />
+              Переподключить Instagram
+            </a>
+          </div>
         </div>
       )}
 
-      {/* Aggregate totals */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <StatCard label="Просмотры" value={formatNumber(totals.views)} />
-        <StatCard label="Охват" value={formatNumber(totals.reach)} />
-        <StatCard label="Лайки" value={formatNumber(totals.likes)} />
-        <StatCard label="Комментарии" value={formatNumber(totals.comments)} />
-        <StatCard label="Сохранения" value={formatNumber(totals.saved)} />
-        <StatCard label="Репосты" value={formatNumber(totals.shares)} />
+      {/* Суммарные показатели */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+        <StatCard
+          label="Просмотры"
+          value={formatNumber(totals.views)}
+          icon={<IconActivity size={16} />}
+          tone="accent"
+        />
+        <StatCard
+          label="Охват"
+          value={formatNumber(totals.reach)}
+          icon={<IconUsers size={16} />}
+          tone="accent"
+        />
+        <StatCard
+          label="Лайки"
+          value={formatNumber(totals.likes)}
+          icon={<IconTrendUp size={16} />}
+          tone="success"
+        />
+        <StatCard
+          label="Комментарии"
+          value={formatNumber(totals.comments)}
+          icon={<IconMessage size={16} />}
+          tone="success"
+        />
+        <StatCard
+          label="Сохранения"
+          value={formatNumber(totals.saved)}
+          icon={<IconTarget size={16} />}
+          tone="muted"
+        />
+        <StatCard
+          label="Репосты"
+          value={formatNumber(totals.shares)}
+          icon={<IconLink size={16} />}
+          tone="muted"
+        />
       </div>
 
-      {/* Follower trend — account-level, independent of the post range */}
+      {/* Динамика подписчиков — уровень аккаунта, не зависит от периода публикаций */}
       <FollowerChart data={followerHistory} followers={followers} />
 
-      {/* Per-post table */}
-      <div className="panel rounded p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Публикации</h2>
+      {/* Таблица публикаций */}
+      <div className="card">
+        <div className="card-head">
+          <h2 className="card-title">Публикации</h2>
+          <span className="badge badge-plain badge-muted tabular-nums">
+            {totals.posts}
+          </span>
+        </div>
         {posts.length === 0 ? (
-          <p className="text-sm text-muted py-8 text-center">Публикаций не найдено</p>
+          <div className="empty">
+            <span className="empty-icon">
+              <IconInbox size={20} />
+            </span>
+            <p className="empty-title">Публикаций не найдено</p>
+          </div>
         ) : (
           // Eight metric columns can't compress into a phone; let the table keep
-          // its natural width and scroll inside the panel instead.
-          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[720px] text-sm">
+          // its natural width and scroll inside the card instead.
+          <div className="overflow-x-auto">
+            <table className="tbl min-w-[760px]">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500 border-b border-border">
-                  <th className="py-2 pr-4 font-medium">Публикация</th>
-                  <th className="py-2 px-3 font-medium text-right">Просмотры</th>
-                  <th className="py-2 px-3 font-medium text-right">Охват</th>
-                  <th className="py-2 px-3 font-medium text-right">Лайки</th>
-                  <th className="py-2 px-3 font-medium text-right">Комментарии</th>
-                  <th className="py-2 px-3 font-medium text-right">Сохранения</th>
-                  <th className="py-2 px-3 font-medium text-right">Репосты</th>
-                  <th className="py-2 pl-3 font-medium text-right">Дата</th>
+                <tr>
+                  <th>Публикация</th>
+                  <th className="!text-right">Просмотры</th>
+                  <th className="!text-right">Охват</th>
+                  <th className="!text-right">Лайки</th>
+                  <th className="!text-right">Комментарии</th>
+                  <th className="!text-right">Сохранения</th>
+                  <th className="!text-right">Репосты</th>
+                  <th className="!text-right">Дата</th>
                 </tr>
               </thead>
               <tbody>
-                {posts.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="py-3 pr-4 max-w-xs">
-                      {p.permalink ? (
-                        <a
-                          href={p.permalink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-foreground hover:text-accent truncate block"
-                        >
-                          {p.caption || (MEDIA_TYPE_LABEL[p.mediaType] ?? "Публикация")}
-                        </a>
-                      ) : (
-                        <span className="text-foreground truncate block">
-                          {p.caption || (MEDIA_TYPE_LABEL[p.mediaType] ?? "Публикация")}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.views)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.reach)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.likes)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.comments)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.saved)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.shares)}
-                    </td>
-                    <td className="py-3 pl-3 text-right text-zinc-500">
-                      {formatDate(p.timestamp)}
-                    </td>
-                  </tr>
-                ))}
+                {posts.map((p) => {
+                  const typeLabel = MEDIA_TYPE_LABEL[p.mediaType] ?? "Публикация";
+                  const title = p.caption || typeLabel;
+                  return (
+                    <tr key={p.id}>
+                      <td className="max-w-xs">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="chip chip-outline shrink-0 !h-6 !px-2 !text-[11px]">
+                            {typeLabel}
+                          </span>
+                          {p.permalink ? (
+                            <a
+                              href={p.permalink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block truncate text-foreground hover:text-accent-hi"
+                            >
+                              {title}
+                            </a>
+                          ) : (
+                            <span className="block truncate text-foreground">{title}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-right tabular-nums text-muted-2">
+                        {formatNumber(p.views)}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-2">
+                        {formatNumber(p.reach)}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-2">
+                        {formatNumber(p.likes)}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-2">
+                        {formatNumber(p.comments)}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-2">
+                        {formatNumber(p.saved)}
+                      </td>
+                      <td className="text-right tabular-nums text-muted-2">
+                        {formatNumber(p.shares)}
+                      </td>
+                      <td className="whitespace-nowrap text-right tabular-nums text-muted">
+                        {formatDate(p.timestamp)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
