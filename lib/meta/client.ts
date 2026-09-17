@@ -366,6 +366,46 @@ export async function sendDirectMessage(
 }
 
 /**
+ * Отправить фотографию в уже открытую переписку.
+ *
+ * Meta скачивает картинку по адресу сама, поэтому он обязан быть публичным и
+ * доступным снаружи. Текст и вложение в одном сообщении не совмещаются —
+ * фотография всегда уходит отдельным сообщением.
+ *
+ * Отправить картинку ответом на комментарий (recipient.comment_id) нельзя:
+ * такой ответ разрешён один и только текстом, поэтому фотографии уходят уже
+ * после того, как человек нажал кнопку и открыл переписку.
+ */
+export async function sendDirectMessageImage(
+  accessToken: string,
+  instagramAccountId: string,
+  userId: string,
+  imageUrl: string
+): Promise<{ recipient_id: string; message_id: string }> {
+  const response = await fetch(
+    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        recipient: { id: userId },
+        message: {
+          attachment: {
+            type: "image",
+            payload: { url: imageUrl, is_reusable: false },
+          },
+        },
+      }),
+    }
+  );
+
+  return handleResponse(response);
+}
+
+/**
  * Send a direct message as a button template with up to 3 web_url buttons —
  * the reveal message plus tappable link buttons (cleaner than inline URLs).
  */

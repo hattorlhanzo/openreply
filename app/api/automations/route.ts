@@ -12,6 +12,10 @@ import {
 } from "@/lib/workspace-access";
 import { resolveWorkspaceContext, resolveWorkspaceId } from "@/lib/bot-auth";
 import { API_ERRORS } from "@/lib/i18n/common";
+import {
+  MAX_IMAGES_PER_CAMPAIGN,
+  MEDIA_NAME_PATTERN,
+} from "@/lib/media/storage";
 
 // This list is read-your-writes (created/imported campaigns must show up
 // immediately), so never cache it at the route or CDN layer.
@@ -30,6 +34,13 @@ const createAutomationSchema = z
     matchAnyWord: z.boolean().optional().default(false),
     dmTriggerEnabled: z.boolean().optional().default(false),
     dmMessage: z.string().min(1).max(1000),
+    // Только имена файлов, выданные /api/media: произвольная строка сюда
+    // попасть не должна — её отдали бы Meta как адрес картинки.
+    dmImages: z
+      .array(z.string().regex(MEDIA_NAME_PATTERN))
+      .max(MAX_IMAGES_PER_CAMPAIGN)
+      .optional()
+      .default([]),
     openingDmEnabled: z.boolean().optional().default(false),
     openingDmMessage: z.string().max(1000).optional().nullable(),
     openingDmButtonLabel: z.string().max(64).optional().nullable(),
@@ -80,6 +91,14 @@ const createAutomationSchema = z
       (Boolean(d.openingDmMessage?.trim()) &&
         Boolean(d.openingDmButtonLabel?.trim())),
     { message: API_ERRORS.openingDmNeedsMessageAndButton, path: ["openingDmMessage"] }
+  )
+  // Фотография уходит отдельным сообщением, а ответ на комментарий разрешён
+  // один и только текстом. Значит переписка к этому моменту должна быть
+  // открыта: либо человек нажал кнопку первого сообщения, либо написал сам.
+  .refine(
+    (d) =>
+      d.dmImages.length === 0 || d.openingDmEnabled || d.dmTriggerEnabled,
+    { message: API_ERRORS.imagesNeedOpenConversation, path: ["dmImages"] }
   );
 
 const updateAutomationSchema = z.object({
@@ -93,6 +112,10 @@ const updateAutomationSchema = z.object({
   matchAnyWord: z.boolean().optional(),
   dmTriggerEnabled: z.boolean().optional(),
   dmMessage: z.string().min(1).max(1000).optional(),
+  dmImages: z
+    .array(z.string().regex(MEDIA_NAME_PATTERN))
+    .max(MAX_IMAGES_PER_CAMPAIGN)
+    .optional(),
   openingDmEnabled: z.boolean().optional(),
   openingDmMessage: z.string().max(1000).optional().nullable(),
   openingDmButtonLabel: z.string().max(64).optional().nullable(),
@@ -400,6 +423,7 @@ export async function POST(request: NextRequest) {
       matchAnyWord,
       dmTriggerEnabled: parsed.data.dmTriggerEnabled,
       dmMessage: parsed.data.dmMessage,
+      dmImages: parsed.data.dmImages,
       openingDmEnabled,
       openingDmMessage: openingDmEnabled
         ? parsed.data.openingDmMessage || null
@@ -506,6 +530,21 @@ export async function PATCH(request: NextRequest) {
     secondaryButtonLabel,
     ...automationData
   } = parsed.data;
+
+  // Та же проверка, что и при создании, но по итоговому состоянию: PATCH
+  // присылает только изменённые поля, поэтому выключить кнопку и оставить
+  // фотографии можно было бы двумя отдельными запросами.
+  const nextImages = automationData.dmImages ?? existing.dmImages;
+  const nextOpeningDm =
+    automationData.openingDmEnabled ?? existing.openingDmEnabled;
+  const nextDmTrigger =
+    automationData.dmTriggerEnabled ?? existing.dmTriggerEnabled;
+  if (nextImages.length > 0 && !nextOpeningDm && !nextDmTrigger) {
+    return NextResponse.json(
+      { success: false, error: API_ERRORS.imagesNeedOpenConversation },
+      { status: 400 }
+    );
+  }
 
   // Keep dependent fields consistent: any-word clears keywords; a disabled
   // opening DM clears its message and button.

@@ -8,6 +8,7 @@ const {
   mockGetUserFollowStatus,
   mockSendDirectMessageWithButton,
   mockSendDirectMessage,
+  mockSendDirectMessageImage,
   mockSendDirectMessageWithLinkButton,
   mockDecryptToken,
   mockMatchKeywords,
@@ -41,6 +42,7 @@ const {
   mockGetUserFollowStatus: vi.fn(),
   mockSendDirectMessageWithButton: vi.fn(),
   mockSendDirectMessage: vi.fn(),
+  mockSendDirectMessageImage: vi.fn(),
   mockSendDirectMessageWithLinkButton: vi.fn(),
   mockDecryptToken: vi.fn(),
   mockMatchKeywords: vi.fn(),
@@ -61,6 +63,7 @@ vi.mock("@/lib/meta/client", () => ({
   getUserFollowStatus: mockGetUserFollowStatus,
   sendDirectMessageWithButton: mockSendDirectMessageWithButton,
   sendDirectMessage: mockSendDirectMessage,
+  sendDirectMessageImage: mockSendDirectMessageImage,
   sendDirectMessageWithLinkButton: mockSendDirectMessageWithLinkButton,
   sendCommentReply: vi.fn(),
   MetaApiError: class MetaApiError extends Error {
@@ -139,6 +142,7 @@ const mockAutomation = {
   postId: "media_101",
   keywords: ["LINK", "PRICE"],
   dmMessage: "Hey {username}! Here is the link: https://example.com",
+  dmImages: [],
   isActive: true,
   wholeWordMatch: true,
   matchAnyPost: false,
@@ -713,6 +717,81 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "commenter_999",
       "Hey commenter_user! Here is the link: https://example.com"
+    );
+  });
+
+  it("отправляет фотографии кампании перед текстом сообщения", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([]);
+    mockPrisma.automation.findFirst.mockResolvedValue({
+      ...mockAutomation,
+      dmImages: [
+        "0123456789abcdef0123456789abcdef.jpg",
+        "fedcba9876543210fedcba9876543210.png",
+      ],
+      trackedLinks: [],
+    });
+
+    const processor = getProcessor();
+    await processor(
+      createMockPostbackJob({
+        instagramAccountId: "ig_456",
+        userId: "commenter_999",
+        payload: "reveal:auto_789",
+      })
+    );
+
+    // Meta скачивает картинку сама, поэтому адрес обязан быть абсолютным.
+    expect(mockSendDirectMessageImage).toHaveBeenCalledTimes(2);
+    expect(mockSendDirectMessageImage).toHaveBeenNthCalledWith(
+      1,
+      "decrypted_token",
+      "ig_456",
+      "commenter_999",
+      "http://localhost:3000/media/0123456789abcdef0123456789abcdef.jpg"
+    );
+    expect(mockSendDirectMessageImage).toHaveBeenNthCalledWith(
+      2,
+      "decrypted_token",
+      "ig_456",
+      "commenter_999",
+      "http://localhost:3000/media/fedcba9876543210fedcba9876543210.png"
+    );
+
+    // Сначала картинка, под ней подпись — как это выглядит в переписке.
+    expect(
+      mockSendDirectMessageImage.mock.invocationCallOrder[0]
+    ).toBeLessThan(mockSendDirectMessage.mock.invocationCallOrder[0]);
+  });
+
+  it("доставляет текст со ссылкой, даже если фотография не ушла", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([]);
+    mockPrisma.automation.findFirst.mockResolvedValue({
+      ...mockAutomation,
+      dmImages: ["0123456789abcdef0123456789abcdef.jpg"],
+      trackedLinks: [],
+    });
+    mockSendDirectMessageImage.mockRejectedValueOnce(new Error("image rejected"));
+
+    const processor = getProcessor();
+    await processor(
+      createMockPostbackJob({
+        instagramAccountId: "ig_456",
+        userId: "commenter_999",
+        payload: "reveal:auto_789",
+      })
+    );
+
+    // Ссылка важнее картинки: получить её без фото лучше, чем не получить.
+    expect(mockSendDirectMessage).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "commenter_999",
+      "Hey commenter_user! Here is the link: https://example.com"
+    );
+    expect(mockPrisma.dmLog.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ status: "SENT" }),
+      })
     );
   });
 

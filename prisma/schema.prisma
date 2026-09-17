@@ -183,6 +183,9 @@ model Automation {
   // postId / matchAnyPost do not apply to it.
   dmTriggerEnabled Boolean @default(false)
   dmMessage      String
+  /// Фотографии, которые уходят перед текстом сообщения. Хранятся именами
+  /// файлов в MEDIA_DIR; абсолютный адрес собирается на отправке.
+  dmImages       String[] @default([])
   openingDmEnabled     Boolean @default(false)
   openingDmMessage     String?
   openingDmButtonLabel String?

@@ -65,6 +65,8 @@ while true; do
     last_daily="$today"
     call refresh-tokens
     call snapshot-followers
+    # Фотографии брошенных черновиков: без уборки том растёт без предела.
+    call cleanup-media
   fi
 
   # Half a minute: short enough never to skip a slot, long enough to stay idle.

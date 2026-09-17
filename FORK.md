@@ -18,6 +18,7 @@ upstream changes means keeping them by hand.
 | `deploy/multi/` | Many client instances on one server: shared Postgres, per-client stack, provisioning |
 | `docs/onboarding.md` | Step-by-step runbook for adding a client |
 | `docs/multi-client.md` | Why the per-client model avoids Meta App Review, and what it costs |
+| `lib/media/`, `app/api/media`, `app/media/[file]` | Фотографии в сообщении кампании — см. [docs/photos.md](docs/photos.md) |
 
 ## Changed
 

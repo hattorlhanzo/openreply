@@ -19,6 +19,7 @@ import {
   getUserFollowStatus,
   sendCommentReply,
   sendDirectMessage,
+  sendDirectMessageImage,
   sendDirectMessageWithButton,
   sendDirectMessageWithLinkButton,
   sendPrivateReply,
@@ -26,6 +27,8 @@ import {
   sendPrivateReplyWithLinkButton,
 } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { getBaseUrl } from "@/lib/env";
+import { mediaUrl } from "@/lib/media/storage";
 import { matchKeywords } from "@/lib/utils/keyword-matcher";
 import { reserveDMSlot } from "@/lib/utils/rate-limiter";
 import {
@@ -111,10 +114,50 @@ function buildInlineLinkFallback(
 
 type RevealAutomation = {
   dmMessage: string;
+  dmImages: string[];
   linkButtonLabel: string | null;
   trackedLinks: WorkerTrackedLink[];
   instagramAccount: { instagramId: string };
 };
+
+/**
+ * Отправить фотографии кампании перед её текстом.
+ *
+ * Картинка и текст в одно сообщение не складываются, поэтому каждая уходит
+ * отдельным сообщением и раньше текста — так в переписке сначала видно
+ * товар, а под ним подпись со ссылкой.
+ *
+ * Упавшая отправка фотографии не срывает сообщение: ссылка и текст важнее
+ * картинки, и получить их без фото лучше, чем не получить ничего.
+ */
+async function sendCampaignImages(
+  accessToken: string,
+  automation: RevealAutomation,
+  userId: string,
+  context: string
+): Promise<void> {
+  // Страховка на случай выборки без этого поля: молча уйти без фотографий
+  // лучше, чем уронить отправку текста со ссылкой.
+  const images = automation.dmImages ?? [];
+  if (images.length === 0) return;
+
+  const baseUrl = getBaseUrl();
+  for (const name of images) {
+    try {
+      await sendDirectMessageImage(
+        accessToken,
+        automation.instagramAccount.instagramId,
+        userId,
+        mediaUrl(name, baseUrl)
+      );
+    } catch (error) {
+      console.log(
+        `[DM Worker] Failed to send campaign image in ${context}:`,
+        formatError(error)
+      );
+    }
+  }
+}
 
 /**
  * Deliver a campaign's reveal message as a direct message. Shared by the
@@ -128,6 +171,13 @@ async function sendRevealDirectMessage(
   commenterName: string | null,
   context: string
 ): Promise<void> {
+  await sendCampaignImages(
+    accessToken,
+    automation,
+    userId,
+    context
+  );
+
   if (automation.trackedLinks.length === 0) {
     await sendDirectMessage(
       accessToken,

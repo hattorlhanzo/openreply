@@ -29,6 +29,8 @@ interface CampaignPreviewProps {
   openingDmMessage: string;
   openingDmButtonLabel: string;
   revealMessage: string;
+  /** Имена загруженных фотографий — уходят перед текстом со ссылкой. */
+  dmImages?: string[];
   hasLink: boolean;
   linkButtonLabel: string;
   linkUrl?: string;
@@ -314,6 +316,7 @@ function DmScreen({
   openingDmMessage,
   openingDmButtonLabel,
   revealMessage,
+  dmImages = [],
   hasLink,
   linkButtonLabel,
   hasSecondLink,
@@ -333,6 +336,7 @@ function DmScreen({
   openingDmMessage: string;
   openingDmButtonLabel: string;
   revealMessage: string;
+  dmImages?: string[];
   hasLink: boolean;
   linkButtonLabel: string;
   linkUrl?: string;
@@ -360,7 +364,7 @@ function DmScreen({
         </span>
       </div>
 
-      <div className="flex-1 space-y-3 px-3 py-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4">
         {inboundMessage !== undefined && (
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
@@ -407,6 +411,18 @@ function DmScreen({
             </div>
           </>
         )}
+        {/* Фотографии уходят перед текстом и каждая — отдельным сообщением:
+            в одно сообщение картинка с подписью не складывается. */}
+        {dmImages.map((name) => (
+          <div key={name} className="flex items-end gap-2">
+            <Avatar url={avatarUrl} size={24} />
+            <img
+              src={`/media/${name}`}
+              alt=""
+              className="max-h-[92px] max-w-[58%] rounded-2xl rounded-bl-md border border-zinc-700 object-cover"
+            />
+          </div>
+        ))}
         {(() => {
           const resolved = revealMessage.replace(/\{username\}/g, SAMPLE_USER);
           const hasToken = resolved.includes("{link}");
@@ -520,6 +536,7 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             openingDmMessage={props.openingDmMessage}
             openingDmButtonLabel={props.openingDmButtonLabel}
             revealMessage={props.revealMessage}
+            dmImages={props.dmImages}
             hasLink={props.hasLink}
             linkButtonLabel={props.linkButtonLabel}
             hasSecondLink={props.hasSecondLink}
@@ -542,6 +559,7 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             openingDmMessage=""
             openingDmButtonLabel=""
             revealMessage={props.revealMessage}
+            dmImages={props.dmImages}
             hasLink={props.hasLink}
             linkButtonLabel={props.linkButtonLabel}
             hasSecondLink={props.hasSecondLink}

@@ -94,6 +94,9 @@ export const IconRefresh = (p: IconProps) => (
 export const IconTrendUp = (p: IconProps) => (
   <svg {...base(p)}><path d="m3 17 6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>
 );
+export const IconImage = (p: IconProps) => (
+  <svg {...base(p)}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="8.5" cy="8.5" r="1.8" /><path d="m4 16.5 4.2-4a1.6 1.6 0 0 1 2.2 0L15 17" /><path d="m13.8 14.3 1.6-1.5a1.6 1.6 0 0 1 2.2 0L20 15" /></svg>
+);
 export const IconMessage = (p: IconProps) => (
   <svg {...base(p)}><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" /></svg>
 );

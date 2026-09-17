@@ -37,6 +37,7 @@ interface Campaign {
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
   dmMessage: string;
+  dmImages?: string[];
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
   openingDmButtonLabel: string | null;
@@ -563,6 +564,7 @@ export default function CampaignDetailPage() {
                   openingDmMessage={campaign.openingDmMessage ?? ""}
                   openingDmButtonLabel={campaign.openingDmButtonLabel ?? ""}
                   revealMessage={campaign.dmMessage}
+                  dmImages={campaign.dmImages ?? []}
                   hasLink={hasLink}
                   linkButtonLabel={campaign.linkButtonLabel ?? "Открыть ссылку"}
                   linkUrl={

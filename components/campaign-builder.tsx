@@ -12,7 +12,7 @@
  * follow / email / follow-up steps arrive in later turns.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import PostPicker from "@/components/post-picker";
@@ -25,7 +25,9 @@ import {
 } from "@/lib/import-queue";
 import {
   IconAlert,
+  IconCheck,
   IconChevronLeft,
+  IconImage,
   IconInstagram,
   IconList,
   IconPlus,
@@ -35,6 +37,24 @@ import {
 
 type TriggerScope = "specific" | "any" | "next";
 type MatchMode = "specific" | "any";
+
+/* Пределы продублированы из lib/media/storage.ts (MAX_IMAGES_PER_CAMPAIGN,
+   MAX_IMAGE_BYTES): тот модуль серверный — тянет fs и crypto, в клиентский
+   бандл его импортировать нельзя. Значения обязаны совпадать. */
+const MAX_DM_IMAGES = 3;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"];
+
+/* Подставляется, когда первое сообщение включается само — вместе с первой
+   добавленной фотографией. */
+const DEFAULT_OPENING_DM_MESSAGE =
+  "Здравствуйте! Нажмите кнопку — и я пришлю всё сюда, в Direct 😊";
+const DEFAULT_OPENING_DM_BUTTON = "Получить ссылку";
+
+/** Адрес загруженной фотографии: в кампании хранится только имя файла. */
+function mediaSrc(name: string): string {
+  return `/media/${name}`;
+}
 
 interface LoadedCampaign {
   id: string;
@@ -47,6 +67,7 @@ interface LoadedCampaign {
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
   dmMessage: string;
+  dmImages?: string[];
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
   openingDmButtonLabel: string | null;
@@ -218,6 +239,18 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [openingDmButtonLabel, setOpeningDmButtonLabel] = useState("");
 
   const [dmMessage, setDmMessage] = useState("");
+
+  // Фотографии к сообщению: в состоянии лежат только имена файлов, выданные
+  // /api/media, — их же принимает кампания.
+  const [dmImages, setDmImages] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageDragOver, setImageDragOver] = useState(false);
+  // Первое сообщение включилось само вместе с первой фотографией — объясняем
+  // это в секции, пока переключатель так и стоит.
+  const [openingDmAutoEnabled, setOpeningDmAutoEnabled] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [linkOpen, setLinkOpen] = useState(false);
   const [trackedDestinationUrl, setTrackedDestinationUrl] = useState("");
   const [linkButtonLabel, setLinkButtonLabel] = useState("Открыть ссылку");
@@ -322,6 +355,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setOpeningDmMessage(c.openingDmMessage ?? "");
         setOpeningDmButtonLabel(c.openingDmButtonLabel ?? "");
         setDmMessage(c.dmMessage);
+        setDmImages(c.dmImages ?? []);
         setLinkButtonLabel(c.linkButtonLabel ?? "Открыть ссылку");
         setIsActive(c.isActive);
         const link = c.trackedLinks?.[0]?.destinationUrl ?? "";
@@ -381,6 +415,10 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     setMatchMode("specific");
     setKeywordText((row.keywords ?? []).join(", "));
     setDmMessage(row.dmMessage ?? "");
+    // Фотографии в CSV не приходят — каждая строка начинает с чистой секции.
+    setDmImages([]);
+    setImageError(null);
+    setOpeningDmAutoEnabled(false);
     setPublicReplyEnabled(Boolean(row.publicReply));
     setPublicReplyMessages(row.publicReply ? [row.publicReply] : [""]);
     const hasOpening = Boolean(row.openingDmMessage);
@@ -434,6 +472,103 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     setDmMessage((cur) => (cur.includes("{link}") ? cur : `${cur.trim()} {link}`.trim()));
   }
 
+  /* ------------------------- фотографии в Direct ------------------------- */
+
+  // Фотография уходит отдельным сообщением, а на комментарий Instagram даёт
+  // ответить один раз и только текстом. Значит переписка должна быть уже
+  // открыта: либо кнопкой первого сообщения, либо сообщением самого человека.
+  const conversationOpens = openingDmEnabled || dmTriggerEnabled;
+  const hasImages = dmImages.length > 0 || uploadingImages > 0;
+  const canAddImages = dmImages.length + uploadingImages < MAX_DM_IMAGES;
+
+  /**
+   * Открыть переписку за пользователя, если он добавил фотографию, а открыть
+   * её нечем: иначе сервер отбил бы сохранение, и человек не понял бы, чем
+   * фотография ему помешала.
+   */
+  function ensureConversationOpener() {
+    if (openingDmEnabled || dmTriggerEnabled) return;
+    setOpeningDmEnabled(true);
+    setOpeningDmMessage((cur) => (cur.trim() ? cur : DEFAULT_OPENING_DM_MESSAGE));
+    setOpeningDmButtonLabel((cur) => (cur.trim() ? cur : DEFAULT_OPENING_DM_BUTTON));
+    setOpeningDmAutoEnabled(true);
+  }
+
+  async function uploadImages(files: File[]) {
+    if (files.length === 0) return;
+    setImageError(null);
+
+    const room = MAX_DM_IMAGES - dmImages.length - uploadingImages;
+    if (room <= 0) {
+      setImageError(`Больше ${MAX_DM_IMAGES} фотографий в одну кампанию не поместится.`);
+      return;
+    }
+    const batch = files.slice(0, room);
+    const skipped = files.length - batch.length;
+
+    // Тип и размер проверяем и здесь: отказ виден сразу, а восьмимегабайтный
+    // файл не уезжает на сервер ради того же ответа.
+    const tooBig = batch.filter((f) => f.size > MAX_IMAGE_BYTES);
+    const wrongType = batch.filter(
+      (f) => !ALLOWED_IMAGE_TYPES.includes(f.type) && f.type !== ""
+    );
+    const accepted = batch.filter(
+      (f) => !tooBig.includes(f) && !wrongType.includes(f)
+    );
+    const localProblem =
+      wrongType.length > 0
+        ? "Instagram принимает только JPEG и PNG."
+        : tooBig.length > 0
+          ? "Файл больше 8 МБ — такой Instagram не примет."
+          : null;
+    if (localProblem) setImageError(localProblem);
+    else if (skipped > 0)
+      setImageError(`Загрузили первые ${batch.length}: в кампании не больше ${MAX_DM_IMAGES} фотографий.`);
+    if (accepted.length === 0) return;
+
+    const opensConversation = conversationOpens;
+    setUploadingImages((n) => n + accepted.length);
+    let uploaded = 0;
+    try {
+      for (const file of accepted) {
+        const form = new FormData();
+        form.append("file", file);
+        let data: { success?: boolean; error?: string; data?: { name: string } };
+        try {
+          const res = await fetch("/api/media", { method: "POST", body: form });
+          data = await res.json();
+        } catch {
+          setImageError("Не удалось загрузить фотографию — проверьте связь.");
+          break;
+        }
+        if (!data.success || !data.data) {
+          setImageError(data.error ?? "Не удалось загрузить фотографию.");
+          break;
+        }
+        const name = data.data.name;
+        uploaded += 1;
+        setDmImages((prev) =>
+          prev.includes(name) ? prev : [...prev, name].slice(0, MAX_DM_IMAGES)
+        );
+      }
+    } finally {
+      setUploadingImages((n) => Math.max(0, n - accepted.length));
+    }
+
+    if (uploaded > 0 && !opensConversation) ensureConversationOpener();
+  }
+
+  function removeImage(name: string) {
+    setDmImages((prev) => prev.filter((n) => n !== name));
+    setImageError(null);
+  }
+
+  function handleImageDrop(event: React.DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setImageDragOver(false);
+    uploadImages(Array.from(event.dataTransfer.files ?? []));
+  }
+
   async function handleSubmit(activeValue: boolean) {
     setError(null);
 
@@ -445,6 +580,14 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     if (!dmMessage.trim()) return setError("Напишите сообщение в Direct со ссылкой.");
     if (openingDmEnabled && (!openingDmMessage.trim() || !openingDmButtonLabel.trim()))
       return setError("Для первого сообщения нужны текст и подпись кнопки.");
+    // Та же проверка стоит на сервере: фотография уходит только туда, где
+    // переписка уже открыта.
+    if (dmImages.length > 0 && !conversationOpens)
+      return setError(
+        "Фотографии уходят только в открытую переписку. Включите первое сообщение с кнопкой или триггер на входящие сообщения."
+      );
+    if (uploadingImages > 0)
+      return setError("Дождитесь, пока загрузятся фотографии.");
 
     setSaving(true);
 
@@ -459,6 +602,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       keywords: matchMode === "any" ? [] : keywords,
       dmTriggerEnabled,
       dmMessage,
+      dmImages,
       openingDmEnabled,
       openingDmMessage: openingDmEnabled ? openingDmMessage : null,
       openingDmButtonLabel: openingDmEnabled ? openingDmButtonLabel : null,
@@ -1074,6 +1218,153 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             </p>
           </ToggleBlock>
         </Section>
+
+        <Section step={6} title="Фото в сообщении">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[13px] leading-snug text-muted">
+              Уйдут отдельными сообщениями перед текстом со ссылкой.
+            </p>
+            <span className="badge badge-muted badge-plain shrink-0 tabular-nums">
+              {dmImages.length} из {MAX_DM_IMAGES}
+            </span>
+          </div>
+
+          {/* Бросить файл можно и на плитки, и на пустую область — обработчики
+              стоят на общей обёртке. */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setImageDragOver(true);
+            }}
+            onDragLeave={() => setImageDragOver(false)}
+            onDrop={handleImageDrop}
+            // Пустая область подсвечивается своей рамкой, поэтому обводка
+            // обёртки нужна только над плитками — иначе две рамки разом.
+            className={`rounded-[10px] transition-shadow ${
+              imageDragOver && hasImages ? "ring-2 ring-accent" : ""
+            }`}
+          >
+            {hasImages ? (
+              <div className="flex flex-wrap gap-2">
+                {dmImages.map((name, index) => (
+                  <div
+                    key={name}
+                    className="relative h-[104px] w-[104px] overflow-hidden rounded-[10px] border border-border bg-surface-2"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={mediaSrc(name)}
+                      alt={`Фотография ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(name)}
+                      aria-label={`Удалить фотографию ${index + 1}`}
+                      className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full border border-border bg-surface text-muted-2 transition-colors hover:border-error hover:text-error"
+                    >
+                      <IconX size={13} />
+                    </button>
+                  </div>
+                ))}
+                {Array.from({ length: uploadingImages }).map((_, i) => (
+                  <div
+                    key={`pending-${i}`}
+                    className="skeleton h-[104px] w-[104px] !rounded-[10px]"
+                  />
+                ))}
+                {canAddImages && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex h-[104px] w-[104px] flex-col items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border-hover bg-surface-2 text-muted-2 transition-colors hover:border-accent hover:text-foreground"
+                  >
+                    <IconPlus size={18} />
+                    <span className="text-[12px] font-medium">Добавить</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImages > 0}
+                className={`flex w-full flex-col items-center gap-2 rounded-[10px] border border-dashed px-4 py-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  imageDragOver
+                    ? "border-accent bg-accent/10"
+                    : "border-border-hover bg-surface-2 hover:border-accent"
+                }`}
+              >
+                <span className="icon-tile !h-9 !w-9">
+                  <IconImage size={18} />
+                </span>
+                <span className="text-[13px] font-semibold text-foreground">
+                  {uploadingImages > 0
+                    ? "Загружаем…"
+                    : "Перетащите фото сюда или выберите файл"}
+                </span>
+                <span className="text-[12px] text-muted">
+                  JPEG или PNG, до 8 МБ. Не больше {MAX_DM_IMAGES} фотографий.
+                </span>
+              </button>
+            )}
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              uploadImages(Array.from(e.target.files ?? []));
+              // Тот же файл должны принимать повторно — после удаления.
+              e.target.value = "";
+            }}
+          />
+
+          {hasImages && (
+            <p className="hint !mt-0">
+              {canAddImages
+                ? `JPEG или PNG, до 8 МБ. Не больше ${MAX_DM_IMAGES} фотографий.`
+                : "Добавлен максимум. Чтобы заменить фотографию, удалите одну из загруженных."}
+            </p>
+          )}
+
+          {imageError && (
+            <p className="flex items-start gap-1.5 text-[12px] leading-snug text-error">
+              <IconAlert size={14} className="mt-px shrink-0" />
+              {imageError}
+            </p>
+          )}
+
+          {/* Почему первое сообщение включилось само. Остаётся в секции, пока
+              переключатель стоит — это единственное объяснение. */}
+          {openingDmAutoEnabled && openingDmEnabled && (
+            <div className="flex items-start gap-2.5 rounded-[10px] border border-border-subtle bg-surface-2 p-3">
+              <span className="icon-tile icon-tile-success !h-6 !w-6 !rounded-[7px] shrink-0">
+                <IconCheck size={13} />
+              </span>
+              <p className="text-[12px] leading-relaxed text-muted-2">
+                Включили «первое сообщение» в шаге 4: фотографию можно отправить
+                только в открытую переписку, а открывает её нажатие кнопки.
+              </p>
+            </div>
+          )}
+
+          {hasImages && !conversationOpens && (
+            <div className="flex items-start gap-2.5 rounded-[10px] border border-warning/40 bg-surface-2 p-3">
+              <span className="icon-tile icon-tile-warning !h-6 !w-6 !rounded-[7px] shrink-0">
+                <IconAlert size={13} />
+              </span>
+              <p className="text-[12px] leading-relaxed text-muted-2">
+                Фотографии уходят только в открытую переписку. Включите «первое
+                сообщение» в шаге 4 или ответ на входящие в Direct в шаге 3 —
+                иначе кампания не сохранится.
+              </p>
+            </div>
+          )}
+        </Section>
       </div>
 
       {/* Right: preview */}
@@ -1105,6 +1396,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                 openingDmMessage={openingDmMessage}
                 openingDmButtonLabel={openingDmButtonLabel}
                 revealMessage={dmMessage}
+                dmImages={dmImages}
                 hasLink={Boolean(trackedDestinationUrl.trim())}
                 linkButtonLabel={linkButtonLabel || "Открыть ссылку"}
                 linkUrl={trackedDestinationUrl.trim() || undefined}
