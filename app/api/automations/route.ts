@@ -16,6 +16,7 @@ import {
   MAX_IMAGES_PER_CAMPAIGN,
   MEDIA_NAME_PATTERN,
 } from "@/lib/media/storage";
+import { areDmPhotosEnabled } from "@/lib/env";
 
 // This list is read-your-writes (created/imported campaigns must show up
 // immediately), so never cache it at the route or CDN layer.
@@ -423,7 +424,7 @@ export async function POST(request: NextRequest) {
       matchAnyWord,
       dmTriggerEnabled: parsed.data.dmTriggerEnabled,
       dmMessage: parsed.data.dmMessage,
-      dmImages: parsed.data.dmImages,
+      dmImages: areDmPhotosEnabled() ? parsed.data.dmImages : [],
       openingDmEnabled,
       openingDmMessage: openingDmEnabled
         ? parsed.data.openingDmMessage || null

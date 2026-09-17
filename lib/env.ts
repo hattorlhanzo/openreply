@@ -46,6 +46,22 @@ export function getMissingInstagramOAuthEnv(): string[] {
   });
 }
 
+/**
+ * Фотографии в сообщении кампании.
+ *
+ * Выключены по умолчанию: проверка 17.09.2026 показала, что Meta отклоняет
+ * любое медиа от приложения со Standard Access — картинка не уходит ни с
+ * нашего сервера, ни с чужого, и Meta за файлом даже не приходит. Пока доступ
+ * не расширен через App Review, блок в конструкторе показывать нельзя: иначе
+ * владелец загрузит фотографию и будет ждать отправки, которой не будет.
+ *
+ * Включается переменной DM_PHOTOS_ENABLED=1 на сервере и
+ * NEXT_PUBLIC_DM_PHOTOS_ENABLED=1 на сборке фронта.
+ */
+export function areDmPhotosEnabled(): boolean {
+  return process.env.DM_PHOTOS_ENABLED === "1";
+}
+
 export function getMetaGraphApiVersion(): string {
   return process.env.META_GRAPH_API_VERSION ?? "v25.0";
 }

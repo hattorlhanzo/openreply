@@ -41,6 +41,13 @@ type MatchMode = "specific" | "any";
 /* Пределы продублированы из lib/media/storage.ts (MAX_IMAGES_PER_CAMPAIGN,
    MAX_IMAGE_BYTES): тот модуль серверный — тянет fs и crypto, в клиентский
    бандл его импортировать нельзя. Значения обязаны совпадать. */
+/**
+ * Фотографии в сообщении. Скрыты, пока Meta не даст приложению расширенный
+ * доступ: со Standard Access она отклоняет любое медиа, и загруженная
+ * фотография просто не дошла бы до подписчика. Подробности — docs/photos.md.
+ */
+const PHOTOS_ENABLED = process.env.NEXT_PUBLIC_DM_PHOTOS_ENABLED === "1";
+
 const MAX_DM_IMAGES = 3;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"];
@@ -582,7 +589,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       return setError("Для первого сообщения нужны текст и подпись кнопки.");
     // Та же проверка стоит на сервере: фотография уходит только туда, где
     // переписка уже открыта.
-    if (dmImages.length > 0 && !conversationOpens)
+    if (PHOTOS_ENABLED && dmImages.length > 0 && !conversationOpens)
       return setError(
         "Фотографии уходят только в открытую переписку. Включите первое сообщение с кнопкой или триггер на входящие сообщения."
       );
@@ -602,7 +609,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       keywords: matchMode === "any" ? [] : keywords,
       dmTriggerEnabled,
       dmMessage,
-      dmImages,
+      dmImages: PHOTOS_ENABLED ? dmImages : [],
       openingDmEnabled,
       openingDmMessage: openingDmEnabled ? openingDmMessage : null,
       openingDmButtonLabel: openingDmEnabled ? openingDmButtonLabel : null,
@@ -1219,6 +1226,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           </ToggleBlock>
         </Section>
 
+        {PHOTOS_ENABLED && (
         <Section step={6} title="Фото в сообщении">
           <div className="flex items-start justify-between gap-3">
             <p className="text-[13px] leading-snug text-muted">
@@ -1365,6 +1373,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             </div>
           )}
         </Section>
+        )}
       </div>
 
       {/* Right: preview */}

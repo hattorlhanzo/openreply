@@ -10,11 +10,19 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import { areDmPhotosEnabled } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 /** Загрузка фотографии для кампании. */
 export async function POST(request: NextRequest) {
+  if (!areDmPhotosEnabled()) {
+    return NextResponse.json(
+      { success: false, error: API_ERRORS.dmPhotosDisabled },
+      { status: 403 }
+    );
+  }
+
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
