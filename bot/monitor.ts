@@ -14,6 +14,7 @@
 
 import { prisma } from "@/lib/db/client";
 import { getWorkerHealth } from "@/lib/ops/worker-health";
+import { describeFetchError } from "./fetch-error";
 
 const CHAT = process.env.TELEGRAM_ALLOWED_USER_ID!;
 const TG = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
@@ -23,8 +24,30 @@ const CHECK_INTERVAL_MS = 10 * 60 * 1000;
 const DIGEST_HOUR_UTC = Number(process.env.BOT_DIGEST_HOUR_UTC ?? 6);
 const TOKEN_WARN_DAYS = 14;
 
+// An alert nobody receives is worse than no alerting at all, so a send that
+// hits a transport error is retried once before it is given up on.
+const NOTIFY_TIMEOUT_MS = 20_000;
+
 async function notify(text: string): Promise<void> {
+  try {
+    await sendToTelegram(text);
+  } catch (error) {
+    console.error("[monitor] отправка:", describeFetchError(error, NOTIFY_TIMEOUT_MS));
+    await new Promise((res) => setTimeout(res, 3000));
+    try {
+      await sendToTelegram(text);
+    } catch (retryError) {
+      console.error(
+        "[monitor] отправка не удалась повторно:",
+        describeFetchError(retryError, NOTIFY_TIMEOUT_MS)
+      );
+    }
+  }
+}
+
+async function sendToTelegram(text: string): Promise<void> {
   await fetch(`${TG}/sendMessage`, {
+    signal: AbortSignal.timeout(NOTIFY_TIMEOUT_MS),
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -176,7 +199,7 @@ export function startMonitor() {
         await sendDigestNow();
       }
     } catch (e) {
-      console.error("[monitor]", e instanceof Error ? e.message : e);
+      console.error("[monitor]", describeFetchError(e));
     }
   };
 

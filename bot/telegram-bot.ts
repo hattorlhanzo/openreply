@@ -1,3 +1,4 @@
+import { describeFetchError } from "./fetch-error";
 import { startMonitor, sendDigestNow } from "./monitor";
 
 /**
@@ -171,22 +172,6 @@ const edit = (
 // through the Graph API one page at a time and is by far the slowest call here.
 const APP_TIMEOUT_MS = 90_000;
 
-/**
- * Node's fetch reports every transport failure as the single word "fetch
- * failed" and hides what actually happened in `cause`. Unwrap it, or a timeout,
- * a refused connection and a DNS failure all reach the operator as the same
- * useless sentence.
- */
-function describeFetchError(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
-  const code = (error.cause as { code?: string } | undefined)?.code;
-  if (error.name === "TimeoutError" || code === "UND_ERR_HEADERS_TIMEOUT") {
-    return `приложение не ответило за ${APP_TIMEOUT_MS / 1000} с`;
-  }
-  if (code === "ECONNREFUSED") return "приложение не отвечает (порт закрыт)";
-  return code ? `${error.message} (${code})` : error.message;
-}
-
 async function appFetch(path: string, init: RequestInit): Promise<Response> {
   return fetch(`${APP_URL}${path}`, {
     ...init,
@@ -207,11 +192,11 @@ async function app(path: string, init: RequestInit = {}): Promise<unknown> {
   } catch (error) {
     // Retry once, but only for reads: replaying a POST could create a second
     // campaign, and a duplicate is worse than an error message.
-    if (method !== "GET") throw new Error(describeFetchError(error));
+    if (method !== "GET") throw new Error(describeFetchError(error, APP_TIMEOUT_MS));
     try {
       r = await appFetch(path, init);
     } catch (retryError) {
-      throw new Error(describeFetchError(retryError));
+      throw new Error(describeFetchError(retryError, APP_TIMEOUT_MS));
     }
   }
   const text = await r.text();
@@ -919,7 +904,7 @@ async function main() {
       failingSince ??= Date.now();
       const stuckForMs = Date.now() - failingSince;
       console.error(
-        `[bot] опрос Telegram: ${describeFetchError(e)} (${Math.round(stuckForMs / 1000)} с подряд)`
+        `[bot] опрос Telegram: ${describeFetchError(e, POLL_TIMEOUT_MS)} (${Math.round(stuckForMs / 1000)} с подряд)`
       );
 
       if (stuckForMs >= GIVE_UP_AFTER_MS) {
