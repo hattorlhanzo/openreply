@@ -3,7 +3,12 @@ import {
   productDm,
   productKeywords,
   productReplies,
+  serviceDm,
+  serviceKeywords,
+  serviceLinks,
+  serviceReplies,
 } from "../bot/presets";
+import { matchKeywords } from "../lib/utils/keyword-matcher";
 
 describe("product preset", () => {
   it("appends the brand after the fixed intent words", () => {
@@ -56,5 +61,64 @@ describe("product preset", () => {
       expect(productDm(count)).toContain("{username}");
       expect(productDm(count)).toContain("{link}");
     }
+  });
+});
+
+describe("service preset", () => {
+  it("covers both spellings of плёнка", () => {
+    // The matcher keeps Cyrillic combining marks on purpose, so е and ё are
+    // two different keywords and both have to be listed.
+    const keywords = serviceKeywords();
+
+    expect(matchKeywords("сколько стоит плёнка?", keywords).matched).toBe(true);
+    expect(matchKeywords("сколько стоит пленка?", keywords).matched).toBe(true);
+  });
+
+  it("fires on the words the operator listed", () => {
+    const keywords = serviceKeywords();
+
+    for (const comment of [
+      "Броня на капот сколько стоит",
+      "Цена?",
+      "скиньте цену",
+      "как купить",
+      "дайте ссылку",
+      "это полиуретан?",
+    ]) {
+      expect(matchKeywords(comment, keywords).matched, comment).toBe(true);
+    }
+  });
+
+  it("does not fire on a comment with none of them", () => {
+    expect(matchKeywords("Красивая машина", serviceKeywords()).matched).toBe(false);
+  });
+
+  it("offers ten distinct public replies", () => {
+    const replies = serviceReplies();
+
+    expect(replies).toHaveLength(10);
+    expect(new Set(replies).size).toBe(10);
+  });
+
+  it("sends one button to the lead form", () => {
+    const links = serviceLinks();
+
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe(
+      "https://forms.yandex.ru/cloud/6926fbca84227ca4ce3b4a69/"
+    );
+    expect(links[0].label).toBe("Оставить заявку");
+  });
+
+  it("hands out fresh objects, so editing one campaign cannot leak into the next", () => {
+    const first = serviceLinks();
+    first[0].label = "изменено";
+
+    expect(serviceLinks()[0].label).toBe("Оставить заявку");
+    expect(serviceKeywords()).not.toBe(serviceKeywords());
+  });
+
+  it("keeps the {link} token the worker substitutes", () => {
+    expect(serviceDm()).toContain("{link}");
   });
 });

@@ -14,7 +14,7 @@
 /** Written into every template where the brand word belongs. */
 const BRAND = "{бренд}";
 
-export type PresetId = "product";
+export type PresetId = "product" | "service";
 
 /**
  * Always present, in this order, with the brand word appended. Whole-word
@@ -69,6 +69,73 @@ export function productDm(linkCount: number): string {
   return `Добрый день, {username}!\nКак и обещали, прикладываем ${noun}: {link}`;
 }
 
+// --- Услуга: полиуретан ---------------------------------------------------
+
+/**
+ * The service campaign has no variable part at all — one service, one form,
+ * the same wording every time. Picking the post is the whole dialogue.
+ */
+const SERVICE_KEYWORDS = [
+  "броня",
+  "пленка",
+  // The same word spelled with ё, which needs its own entry: the matcher
+  // deliberately keeps Cyrillic combining marks (folding them would turn "й"
+  // into "и"), so "плёнка" — the spelling most people actually use — does not
+  // match a "пленка" keyword.
+  "плёнка",
+  "цена",
+  "цену",
+  "ссылку",
+  // A phrase matches only as that exact pair of words: "сколько это стоит"
+  // does not fire. Kept as given; splitting it would also fire on any other
+  // "стоит" ("стоит ли брать"), which is not the same question.
+  "сколько стоит",
+  "как купить",
+  "полиуретан",
+];
+
+/** Ten phrasings, same reason as the product ones: a column of identical public replies reads as a bot. */
+const SERVICE_REPLIES = [
+  "Добрый день! Направили Вам ссылку в директ.",
+  "Здравствуйте! Ссылку отправили Вам в директ.",
+  "Добрый день! Уже отправили ссылку Вам в директ.",
+  "Здравствуйте! Ссылка уже у Вас в директе.",
+  "Добрый день! Ссылку направили в личные сообщения.",
+  "Здравствуйте! Отправили Вам ссылку в директ.",
+  "Добрый день! Ссылка отправлена Вам в директ.",
+  "Здравствуйте! Направили ссылку в директ.",
+  "Добрый день! Ссылку уже отправили Вам в личные сообщения.",
+  "Здравствуйте! Отправили ссылку Вам в директ.",
+];
+
+/** The lead form every полиуретан campaign points at. */
+const SERVICE_LINK = {
+  url: "https://forms.yandex.ru/cloud/6926fbca84227ca4ce3b4a69/",
+  label: "Оставить заявку",
+};
+
+const SERVICE_DM = "Добрый день! Как и обещали, прикладываем ссылку: {link}";
+
+// Fresh arrays and a fresh object each time: the session mutates what it is
+// handed — the edit flow replaces links in place — and a shared constant would
+// carry that edit into the next campaign built from this preset.
+export function serviceKeywords(): string[] {
+  return [...SERVICE_KEYWORDS];
+}
+
+export function serviceReplies(): string[] {
+  return [...SERVICE_REPLIES];
+}
+
+export function serviceLinks(): { url: string; label: string }[] {
+  return [{ ...SERVICE_LINK }];
+}
+
+export function serviceDm(): string {
+  return SERVICE_DM;
+}
+
 export const PRESET_LABELS: Record<PresetId, string> = {
   product: "📦 Товар",
+  service: "🛠 Услуга",
 };

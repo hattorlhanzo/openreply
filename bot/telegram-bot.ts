@@ -5,6 +5,10 @@ import {
   productDm,
   productKeywords,
   productReplies,
+  serviceDm,
+  serviceKeywords,
+  serviceLinks,
+  serviceReplies,
   type PresetId,
 } from "./presets";
 import { startMonitor, sendDigestNow } from "./monitor";
@@ -445,7 +449,7 @@ async function showPresetChooser(chat: number, messageId?: number) {
       reply_markup: {
         inline_keyboard: [
           [{ text: PRESET_LABELS.product, callback_data: "t:product" }],
-          [{ text: "🛠 Услуга", callback_data: "t:service" }],
+          [{ text: PRESET_LABELS.service, callback_data: "t:service" }],
           [{ text: "⚙️ Вручную", callback_data: "t:manual" }],
           [{ text: "← Меню", callback_data: "M" }],
         ],
@@ -598,9 +602,23 @@ const ASK: Record<CreateStep, string> = {
 
 const MANUAL_STEPS: CreateStep[] = ["keywords", "replies", "links", "message"];
 const PRODUCT_STEPS: CreateStep[] = ["brand", "links"];
+// Empty on purpose: the service campaign has no variable part, so picking the
+// post goes straight to the confirmation screen.
+const SERVICE_STEPS: CreateStep[] = [];
 
-const stepsFor = (s: Session): CreateStep[] =>
-  s.preset === "product" ? PRODUCT_STEPS : MANUAL_STEPS;
+const stepsFor = (s: Session): CreateStep[] => {
+  if (s.preset === "product") return PRODUCT_STEPS;
+  if (s.preset === "service") return SERVICE_STEPS;
+  return MANUAL_STEPS;
+};
+
+/** The whole service campaign, since none of it is asked for. */
+function applyServicePreset(s: Session) {
+  s.keywords = serviceKeywords();
+  s.replies = serviceReplies();
+  s.links = serviceLinks();
+  s.message = serviceDm();
+}
 
 // Every step gets the same pair. From the first step "back" lands on the post
 // picker, which is still useful — picking the wrong reel is easy and would
@@ -656,7 +674,7 @@ async function showConfirm(chat: number, s: Session) {
       inline_keyboard: [
         [{ text: "✅ Создать", callback_data: "OK" }],
         [
-          { text: "← Изменить текст", callback_data: "B" },
+          { text: "← Назад", callback_data: "B" },
           { text: "✖️ Отменить", callback_data: "X" },
         ],
       ],
@@ -987,20 +1005,8 @@ async function handleCallback(
       return void (await showPosts(chat, false, messageId));
     }
     if (a === "service") {
-      return void (await view(
-        chat,
-        messageId,
-        "🛠 <b>Услуга</b>\n\nШаблон для услуг ещё не настроен, " +
-          "поэтому соберём кампанию обычным путём — четыре шага.",
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "Продолжить вручную", callback_data: "t:manual" }],
-              [{ text: "← Назад", callback_data: "N" }],
-            ],
-          },
-        }
-      ));
+      s.preset = "service";
+      return void (await showPosts(chat, false, messageId));
     }
     return void (await showPosts(chat, false, messageId));
   }
@@ -1018,11 +1024,15 @@ async function handleCallback(
     s.replies = [];
     s.links = [];
     s.message = undefined;
-    return void (await askStep(
-      chat,
-      stepsFor(s)[0],
-      `🎬 ${esc(shorten(post.caption, 60))}`
-    ));
+
+    const first = stepsFor(s)[0];
+    if (!first) {
+      // Nothing left to ask — straight to "проверьте перед созданием", which
+      // shows the post, the words and the button it just filled in.
+      applyServicePreset(s);
+      return void (await showConfirm(chat, s));
+    }
+    return void (await askStep(chat, first, `🎬 ${esc(shorten(post.caption, 60))}`));
   }
 
   const campaign = s.campaigns[Number(a)];
