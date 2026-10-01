@@ -67,11 +67,25 @@ services:
 
   web:
     <<: *app
-    ports:
-      # 3100, not 3000: this box also runs an unrelated Next.js app (the CRM)
-      # already bound to 3000. Publishing there would fail to bind — and worse,
-      # deploy/cron.sh would silently drive the wrong application.
-      - "127.0.0.1:3100:3000"
+    # Host networking, like worker and bot, and for the same measured reason:
+    # IPv4 from this network loses about a quarter of connections to
+    # graph.instagram.com while IPv6 loses none, and containers are IPv4-only.
+    # It was left on the compose network at first on the grounds that web's
+    # Instagram calls "tolerate a retry" — wrong for the post picker, which
+    # walks up to 300 media in roughly twelve sequential calls. At a 27% loss
+    # per call, all twelve succeeding is about a 2% event, so "Failed to fetch
+    # Instagram posts" was the normal outcome. The daily token refresh runs the
+    # same path.
+    network_mode: host
+    # Bind loopback explicitly. The published-port mapping used to do this;
+    # on the host network Next would otherwise listen on every interface and
+    # answer the internet on 3100, straight past nginx. 3100 because the CRM
+    # on this box owns 3000 — getting that wrong would also point
+    # deploy/cron.sh at the wrong application.
+    command: ["npx", "next", "start", "-H", "127.0.0.1", "-p", "3100"]
+    extra_hosts:
+      - "postgres:127.0.0.1"
+      - "redis:127.0.0.1"
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,7 +99,7 @@ services:
     # never starts at all. /login is served by the app itself and depends on
     # nothing else. Full /api/health stays the external check.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/login"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3100/login"]
       interval: 30s
       timeout: 10s
       retries: 5
