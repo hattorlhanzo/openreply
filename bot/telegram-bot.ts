@@ -1,4 +1,12 @@
+import { prisma } from "@/lib/db/client";
 import { describeFetchError } from "./fetch-error";
+import {
+  PRESET_LABELS,
+  productDm,
+  productKeywords,
+  productReplies,
+  type PresetId,
+} from "./presets";
 import { startMonitor, sendDigestNow } from "./monitor";
 
 /**
@@ -62,7 +70,7 @@ type Campaign = {
   analytics: { sent: number; failed: number; clicks: number; ctr: number };
 };
 
-type CreateStep = "keywords" | "replies" | "links" | "message";
+type CreateStep = "brand" | "keywords" | "replies" | "links" | "message";
 type EditField = "kw" | "rp" | "ln" | "msg" | "name";
 
 type Link = { url: string; label: string };
@@ -86,6 +94,10 @@ type Session = {
    * the chat rather than a column of prompts, answers and acknowledgements.
    */
   cardId?: number;
+  /** Set when the campaign is being built from a preset rather than by hand. */
+  preset?: PresetId;
+  /** The one word a preset campaign is built around. */
+  brand?: string;
 };
 
 // One operator, so in-memory state is enough. A restart drops an unfinished
@@ -379,6 +391,69 @@ async function loadCampaigns(chat: number): Promise<Campaign[]> {
   return campaigns;
 }
 
+/**
+ * Home screen.
+ *
+ * Counted straight from the log rather than summed from the campaign list:
+ * the per-campaign figures are whatever the API chose to window them to, and
+ * adding them up would quietly answer a different question than "за всё
+ * время". Scoped to the same workspace the bot acts on — the oldest one, as
+ * lib/bot-auth resolves it.
+ */
+async function showMenu(chat: number, messageId?: number) {
+  const workspace = await prisma.workspace.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  const where = workspace ? { workspaceId: workspace.id } : undefined;
+
+  const [sent, failed, total, active] = await Promise.all([
+    prisma.dmLog.count({ where: { ...where, status: "SENT" } }),
+    prisma.dmLog.count({ where: { ...where, status: "FAILED" } }),
+    prisma.automation.count({ where }),
+    prisma.automation.count({ where: { ...where, isActive: true } }),
+  ]);
+
+  await view(
+    chat,
+    messageId,
+    "👋 <b>OpenReply</b>\n\n" +
+      "📊 <b>За всё время</b>\n" +
+      `├ Отправлено: <b>${sent}</b>\n` +
+      `└ Не отправлено: <b>${failed}</b>\n\n` +
+      "📋 <b>Кампании</b>\n" +
+      `└ Всего ${total}, активных ${active}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🆕 Создать кампанию", callback_data: "N" }],
+          [{ text: "📋 Кампании", callback_data: "L" }],
+          [{ text: "📊 Сводка за вчера", callback_data: "D" }],
+        ],
+      },
+    }
+  );
+}
+
+/** Which template to build from, before a post is even picked. */
+async function showPresetChooser(chat: number, messageId?: number) {
+  await view(
+    chat,
+    messageId,
+    "🆕 <b>Новая кампания</b>\n\nЧто продвигаем?",
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: PRESET_LABELS.product, callback_data: "t:product" }],
+          [{ text: "🛠 Услуга", callback_data: "t:service" }],
+          [{ text: "⚙️ Вручную", callback_data: "t:manual" }],
+          [{ text: "← Меню", callback_data: "M" }],
+        ],
+      },
+    }
+  );
+}
+
 async function showList(chat: number, messageId?: number) {
   const campaigns = await loadCampaigns(chat);
 
@@ -492,29 +567,40 @@ async function showPosts(chat: number, showCovered = false, messageId?: number) 
   await renderPicker(chat, messageId);
 }
 
+const STEP_TITLE: Record<CreateStep, string> = {
+  brand: "🏷 Бренд",
+  keywords: "🔑 Ключевые слова",
+  replies: "↩️ Ответы под комментарием",
+  links: "🔗 Ссылки",
+  message: "💬 Текст в директ",
+};
+
 const ASK: Record<CreateStep, string> = {
+  brand:
+    "Одно слово — марка товара. Оно попадёт и в ключевые слова, " +
+    "и в «кавычки» во всех десяти ответах под комментарием.\n\n" +
+    "<code>wiwu</code>",
   keywords:
-    "🔑 <b>Шаг 1 из 4 · Ключевые слова</b>\n\n" +
-    `Через запятую, до ${MAX_KEYWORDS} штук.\n\n` +
-    "<code>+, цена, remax</code>",
+    `Через запятую, до ${MAX_KEYWORDS} штук.\n\n` + "<code>+, цена, remax</code>",
   replies:
-    "↩️ <b>Шаг 2 из 4 · Ответы под комментарием</b>\n\n" +
     `Каждый вариант с новой строки, до ${MAX_REPLIES}. ` +
     "Бот будет их чередовать, чтобы ответы не выглядели одинаково.\n\n" +
     "<code>-</code> — публично не отвечать.",
   links:
-    "🔗 <b>Шаг 3 из 4 · Ссылки</b>\n\n" +
     `До ${MAX_LINKS} штук, каждая с новой строки. Подпись кнопки после «|»:\n\n` +
     "<code>https://example.com/product | Открыть товар</code>\n\n" +
     `Без подписи возьму «${DEFAULT_BUTTON}». <code>-</code> — без ссылок.`,
   message:
-    "💬 <b>Шаг 4 из 4 · Текст в директ</b>\n\n" +
     `До ${MAX_MESSAGE_LEN} символов.\n` +
     "<code>{username}</code> — имя написавшего, <code>{link}</code> — ссылка в тексте.\n\n" +
     "Ссылки и так уйдут кнопками, дублировать не обязательно.",
 };
 
-const STEP_ORDER: CreateStep[] = ["keywords", "replies", "links", "message"];
+const MANUAL_STEPS: CreateStep[] = ["keywords", "replies", "links", "message"];
+const PRODUCT_STEPS: CreateStep[] = ["brand", "links"];
+
+const stepsFor = (s: Session): CreateStep[] =>
+  s.preset === "product" ? PRODUCT_STEPS : MANUAL_STEPS;
 
 // Every step gets the same pair. From the first step "back" lands on the post
 // picker, which is still useful — picking the wrong reel is easy and would
@@ -532,9 +618,16 @@ const STEP_KEYBOARD = {
  * itself so a four-step campaign never grows past one message.
  */
 async function askStep(chat: number, step: CreateStep, note?: string) {
-  session(chat).step = step;
-  const text = note ? `${note}\n\n${ASK[step]}` : ASK[step];
-  await card(chat, text, { reply_markup: STEP_KEYBOARD });
+  const s = session(chat);
+  s.step = step;
+
+  const steps = stepsFor(s);
+  const header = `<b>Шаг ${steps.indexOf(step) + 1} из ${steps.length} · ${STEP_TITLE[step]}</b>`;
+  const body = `${header}\n\n${ASK[step]}`;
+
+  await card(chat, note ? `${note}\n\n${body}` : body, {
+    reply_markup: STEP_KEYBOARD,
+  });
 }
 
 /** Everything collected so far, for a last look before anything is written. */
@@ -665,6 +758,26 @@ async function handleCreateStep(chat: number, s: Session, text: string) {
     askStep(chat, step, `⚠️ ${esc(why)}`);
 
   switch (s.step) {
+    case "brand": {
+      const brand = text.trim();
+      if (!brand) return void (await retry("brand", "Бренд не может быть пустым."));
+      if (/[\n,]/.test(brand)) {
+        return void (await retry("brand", "Нужно одно слово, без запятых и переносов."));
+      }
+      if (brand.length > 40) {
+        return void (await retry("brand", "Слишком длинно для ключевого слова."));
+      }
+
+      s.brand = brand;
+      s.keywords = productKeywords(brand);
+      s.replies = productReplies(brand);
+      return void (await askStep(
+        chat,
+        "links",
+        `✅ Бренд: <b>${esc(brand)}</b>\n` +
+          `   ${s.keywords.length} ключевых слов и ${s.replies.length} ответов собраны по шаблону`
+      ));
+    }
     case "keywords": {
       const r = parseKeywords(text);
       if (typeof r === "string") return void (await retry("keywords", r));
@@ -681,6 +794,12 @@ async function handleCreateStep(chat: number, s: Session, text: string) {
       const r = parseLinks(text);
       if (typeof r === "string") return void (await retry("links", r));
       s.links = r;
+      if (s.preset === "product") {
+        // The DM is part of the template; it only has to agree with how many
+        // buttons there turned out to be.
+        s.message = productDm(r.length);
+        return void (await showConfirm(chat, s));
+      }
       return void (await askStep(chat, "message", `✅ Кнопок: ${r.length}`));
     }
     case "message": {
@@ -788,17 +907,10 @@ async function handleText(chat: number, text: string) {
   // Any command opens a new card; only steps inside a dialogue edit in place.
   if (trimmed.startsWith("/")) await startCard(chat);
 
-  if (trimmed === "/start") {
-    return void (await send(
-      chat,
-      "👋 <b>OpenReply</b>\n\n" +
-        "/new — создать кампанию\n" +
-        "/list — кампании и редактирование\n" +
-        "/stats — сводка за вчера\n" +
-        "/cancel — сбросить"
-    ));
+  if (trimmed === "/start" || trimmed === "/menu") {
+    return void (await showMenu(chat));
   }
-  if (trimmed === "/new") return void (await showPosts(chat));
+  if (trimmed === "/new") return void (await showPresetChooser(chat));
   if (trimmed === "/list") return void (await showList(chat));
   if (trimmed === "/stats") return void (await sendDigestNow());
   if (trimmed === "/cancel") {
@@ -838,8 +950,9 @@ async function handleCallback(
   if (kind === "B") {
     // From the confirmation screen `step` is already cleared, so treat that as
     // "one past the last step" and land back on the DM text.
-    const current = s.step ? STEP_ORDER.indexOf(s.step) : STEP_ORDER.length;
-    const previous = STEP_ORDER[current - 1];
+    const steps = stepsFor(s);
+    const current = s.step ? steps.indexOf(s.step) : steps.length;
+    const previous = steps[current - 1];
     if (!previous) return void (await showPosts(chat));
     return void (await askStep(chat, previous));
   }
@@ -855,6 +968,38 @@ async function handleCallback(
     return void (await renderPicker(chat, messageId));
   }
 
+  if (kind === "M") return void (await showMenu(chat, messageId));
+  if (kind === "N") return void (await showPresetChooser(chat, messageId));
+  if (kind === "D") return void (await sendDigestNow());
+
+  if (kind === "t") {
+    // A new draft, whichever path: leftovers from an abandoned one would
+    // otherwise ride along into this campaign.
+    Object.assign(s, blank(), { cardId: s.cardId, campaigns: s.campaigns });
+
+    if (a === "product") {
+      s.preset = "product";
+      return void (await showPosts(chat, false, messageId));
+    }
+    if (a === "service") {
+      return void (await view(
+        chat,
+        messageId,
+        "🛠 <b>Услуга</b>\n\nШаблон для услуг ещё не настроен, " +
+          "поэтому соберём кампанию обычным путём — четыре шага.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "Продолжить вручную", callback_data: "t:manual" }],
+              [{ text: "← Назад", callback_data: "N" }],
+            ],
+          },
+        }
+      ));
+    }
+    return void (await showPosts(chat, false, messageId));
+  }
+
   if (kind === "A") return void (await showPosts(chat, true, messageId));
   if (kind === "F") return void (await showPosts(chat, false, messageId));
 
@@ -868,8 +1013,11 @@ async function handleCallback(
     s.replies = [];
     s.links = [];
     s.message = undefined;
-    await card(chat, `🎬 ${esc(shorten(post.caption, 60))}`);
-    return void (await askStep(chat, "keywords"));
+    return void (await askStep(
+      chat,
+      stepsFor(s)[0],
+      `🎬 ${esc(shorten(post.caption, 60))}`
+    ));
   }
 
   const campaign = s.campaigns[Number(a)];
@@ -948,6 +1096,7 @@ const GIVE_UP_AFTER_MS = 5 * 60_000;
 // Shown by Telegram when the operator types "/". Registered on every start so
 // the list follows the code rather than whatever was set once by hand.
 const COMMANDS = [
+  { command: "menu", description: "Меню и общая статистика" },
   { command: "new", description: "Создать кампанию" },
   { command: "list", description: "Кампании: посмотреть и отредактировать" },
   { command: "stats", description: "Сводка за вчера" },
