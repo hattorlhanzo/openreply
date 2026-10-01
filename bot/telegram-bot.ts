@@ -213,6 +213,21 @@ async function card(
 }
 
 /**
+ * Begin a new dialogue card.
+ *
+ * Steps within a dialogue rewrite the card in place, which only works while it
+ * is the last thing in the chat — and after a command it may be far above,
+ * where an edit lands invisibly and the bot looks dead. So a command retires
+ * the old card and the next draw starts a fresh one at the bottom.
+ */
+async function startCard(chat: number): Promise<void> {
+  const s = session(chat);
+  if (s.cardId === undefined) return;
+  await dropMessage(chat, s.cardId);
+  s.cardId = undefined;
+}
+
+/**
  * Render a screen. When it came from a button press, rewrite that message and
  * adopt it as the card — the operator may have scrolled back and acted on an
  * older screen, and the dialogue should follow them there.
@@ -770,6 +785,9 @@ async function applyEdit(chat: number, s: Session, text: string) {
 async function handleText(chat: number, text: string) {
   const trimmed = text.trim();
 
+  // Any command opens a new card; only steps inside a dialogue edit in place.
+  if (trimmed.startsWith("/")) await startCard(chat);
+
   if (trimmed === "/start") {
     return void (await send(
       chat,
@@ -784,10 +802,7 @@ async function handleText(chat: number, text: string) {
   if (trimmed === "/list") return void (await showList(chat));
   if (trimmed === "/stats") return void (await sendDigestNow());
   if (trimmed === "/cancel") {
-    // Keep the card through the reset so the answer rewrites the dialogue in
-    // place; blank() would drop it and leave the old one hanging unanswered.
-    const { cardId } = session(chat);
-    sessions.set(chat, { ...blank(), cardId });
+    sessions.set(chat, blank());
     return void (await card(chat, "Сброшено. /new или /list"));
   }
 
@@ -943,8 +958,14 @@ async function main() {
   console.log("[bot] запущен");
 
   // Best effort: a bot that cannot show its menu still works, and failing to
-  // start over it would be absurd.
-  await tg("setMyCommands", { commands: COMMANDS }, true).catch(() => {});
+  // start over it would be absurd. It is logged either way, because a silently
+  // missing menu is indistinguishable from a client that cached the old one.
+  try {
+    await tg("setMyCommands", { commands: COMMANDS });
+    console.log(`[bot] меню команд зарегистрировано: ${COMMANDS.length}`);
+  } catch (e) {
+    console.error("[bot] меню команд не зарегистрировалось:", describeFetchError(e));
+  }
   // Health alerts and the morning digest share this process.
   startMonitor();
   let offset = 0;
