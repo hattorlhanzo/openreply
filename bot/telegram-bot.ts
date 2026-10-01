@@ -746,9 +746,14 @@ async function createCampaign(chat: number, s: Session, message: string) {
       "Посмотреть и отредактировать — /list" +
       (PANEL_URL ? `\n${PANEL_URL}/campaigns` : "")
   );
-  // Leave the receipt standing: the next dialogue starts its own card instead
-  // of overwriting the record that this campaign was created.
+  // Leave the receipt standing: it is the record that this campaign was
+  // created, one message per campaign. Releasing the card first means the menu
+  // below is a new message rather than an overwrite of that record.
   s.cardId = undefined;
+
+  // Land back on the menu, because the next thing after creating one campaign
+  // is almost always creating the next one.
+  await showMenu(chat);
 }
 
 async function handleCreateStep(chat: number, s: Session, text: string) {
