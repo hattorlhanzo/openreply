@@ -80,6 +80,12 @@ type Session = {
   showCovered: boolean;
   message?: string;
   editing?: { id: string; field: EditField };
+  /**
+   * The single message this dialogue is drawn into. Every step rewrites it
+   * instead of sending a new one, so a four-step campaign leaves one card in
+   * the chat rather than a column of prompts, answers and acknowledgements.
+   */
+  cardId?: number;
 };
 
 // One operator, so in-memory state is enough. A restart drops an unfinished
@@ -108,21 +114,30 @@ function session(chat: number): Session {
 
 // --- Telegram -------------------------------------------------------------
 
+// Telegram answers these in milliseconds; anything near a minute is a socket
+// that died quietly, and the whole dialogue would hang on it.
+const TG_TIMEOUT_MS = 20_000;
+
 async function tg(
   method: string,
   body: unknown,
   tolerant = false
-): Promise<void> {
+): Promise<{ message_id?: number } | undefined> {
   const r = await fetch(`${TG}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(TG_TIMEOUT_MS),
   });
-  const j = (await r.json()) as { ok: boolean; description?: string };
-  if (j.ok) return;
+  const j = (await r.json()) as {
+    ok: boolean;
+    description?: string;
+    result?: { message_id?: number };
+  };
+  if (j.ok) return j.result;
 
   // "message is not modified" just means the card already showed this state.
-  if (j.description?.includes("not modified")) return;
+  if (j.description?.includes("not modified")) return undefined;
 
   console.error(`[bot] ${method}: ${j.description}`);
   // Silent failures are the worst kind here: the operator sees nothing and
@@ -142,14 +157,20 @@ async function notifyFailure(chat: number, detail: string) {
   }).catch(() => {});
 }
 
-const send = (chat: number, text: string, extra: Record<string, unknown> = {}) =>
-  tg("sendMessage", {
-    chat_id: chat,
-    text,
-    parse_mode: "HTML",
-    link_preview_options: { is_disabled: true },
-    ...extra,
-  });
+const send = async (
+  chat: number,
+  text: string,
+  extra: Record<string, unknown> = {}
+): Promise<number | undefined> =>
+  (
+    await tg("sendMessage", {
+      chat_id: chat,
+      text,
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      ...extra,
+    })
+  )?.message_id;
 
 const edit = (
   chat: number,
@@ -165,6 +186,62 @@ const edit = (
     link_preview_options: { is_disabled: true },
     ...extra,
   });
+
+/**
+ * Draw into the dialogue's card: rewrite it when we know it, otherwise start
+ * one. An edit fails when the card was deleted by hand or is too old to
+ * change, and losing the step over that would be worse than a second message,
+ * so it falls back to sending.
+ */
+async function card(
+  chat: number,
+  text: string,
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  const s = session(chat);
+
+  if (s.cardId !== undefined) {
+    try {
+      await edit(chat, s.cardId, text, extra);
+      return;
+    } catch {
+      s.cardId = undefined;
+    }
+  }
+
+  s.cardId = await send(chat, text, extra);
+}
+
+/**
+ * Render a screen. When it came from a button press, rewrite that message and
+ * adopt it as the card — the operator may have scrolled back and acted on an
+ * older screen, and the dialogue should follow them there.
+ */
+async function view(
+  chat: number,
+  messageId: number | undefined,
+  text: string,
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  if (messageId !== undefined) {
+    session(chat).cardId = messageId;
+    await edit(chat, messageId, text, extra);
+    return;
+  }
+  await card(chat, text, extra);
+}
+
+/**
+ * Remove the operator's own message once it has been read. Telegram allows
+ * this for incoming messages in a private chat; when it does not (too old, or
+ * permissions changed) the dialogue carries on with one stray line in it.
+ */
+async function dropMessage(chat: number, messageId: number): Promise<void> {
+  await tg("deleteMessage", { chat_id: chat, message_id: messageId }, true).catch(
+    () => {}
+  );
+}
+
 
 // --- App API --------------------------------------------------------------
 
@@ -291,9 +368,7 @@ async function showList(chat: number, messageId?: number) {
   const campaigns = await loadCampaigns(chat);
 
   if (campaigns.length === 0) {
-    const text = "Кампаний пока нет.\n\nСоздать — /new";
-    if (messageId) await edit(chat, messageId, text);
-    else await send(chat, text);
+    await view(chat, messageId, "Кампаний пока нет.\n\nСоздать — /new");
     return;
   }
 
@@ -312,8 +387,7 @@ async function showList(chat: number, messageId?: number) {
     ]),
   };
 
-  if (messageId) await edit(chat, messageId, text, { reply_markup: keyboard });
-  else await send(chat, text, { reply_markup: keyboard });
+  await view(chat, messageId, text, { reply_markup: keyboard });
 }
 
 // --- Create flow ----------------------------------------------------------
@@ -356,9 +430,7 @@ async function renderPicker(chat: number, messageId?: number) {
     },
   ]);
 
-  const markup = { reply_markup: { inline_keyboard: rows } };
-  if (messageId) await edit(chat, messageId, header, markup);
-  else await send(chat, header, markup);
+  await view(chat, messageId, header, { reply_markup: { inline_keyboard: rows } });
 }
 
 /**
@@ -371,7 +443,7 @@ async function showPosts(chat: number, showCovered = false, messageId?: number) 
 
   // Reuse what is already loaded when only the filter or page changed.
   if (s.posts.length === 0 || s.showCovered !== showCovered) {
-    await send(chat, "Загружаю публикации…");
+    await view(chat, messageId, "Загружаю публикации…");
 
     const [postsRes, campaigns] = await Promise.all([
       app("/api/instagram/posts?all=true") as Promise<{ data?: Post[] }>,
@@ -382,6 +454,9 @@ async function showPosts(chat: number, showCovered = false, messageId?: number) 
     const covered = new Set(campaigns.map((c) => c.postId).filter(Boolean) as string[]);
 
     Object.assign(s, blank(), {
+      // blank() knows nothing about the card, and dropping it here would strand
+      // the dialogue in a message nothing writes to again.
+      cardId: s.cardId,
       campaigns,
       covered,
       showCovered,
@@ -389,7 +464,7 @@ async function showPosts(chat: number, showCovered = false, messageId?: number) 
     });
 
     if (s.posts.length === 0) {
-      await send(chat, "Свободных постов нет — на всех уже есть кампании.", {
+      await card(chat, "Свободных постов нет — на всех уже есть кампании.", {
         reply_markup: {
           inline_keyboard: [[{ text: "Показать все посты", callback_data: "A" }]],
         },
@@ -436,9 +511,15 @@ const STEP_KEYBOARD = {
   ],
 };
 
-async function askStep(chat: number, step: CreateStep) {
+/**
+ * Draw a wizard step. `note` is the outcome of the previous answer — the
+ * acknowledgement, or a complaint about what was typed. It rides on the step
+ * itself so a four-step campaign never grows past one message.
+ */
+async function askStep(chat: number, step: CreateStep, note?: string) {
   session(chat).step = step;
-  await send(chat, ASK[step], { reply_markup: STEP_KEYBOARD });
+  const text = note ? `${note}\n\n${ASK[step]}` : ASK[step];
+  await card(chat, text, { reply_markup: STEP_KEYBOARD });
 }
 
 /** Everything collected so far, for a last look before anything is written. */
@@ -462,7 +543,7 @@ function draftSummary(s: Session): string {
 
 async function showConfirm(chat: number, s: Session) {
   s.step = undefined;
-  await send(chat, draftSummary(s), {
+  await card(chat, draftSummary(s), {
     reply_markup: {
       inline_keyboard: [
         [{ text: "✅ Создать", callback_data: "OK" }],
@@ -513,7 +594,7 @@ function parseLinks(text: string): Link[] | string {
 async function createCampaign(chat: number, s: Session, message: string) {
   const post = s.post;
   if (!post) {
-    await send(chat, "Пост потерялся. Начните заново: /new");
+    await card(chat, "Пост потерялся. Начните заново: /new");
     return;
   }
 
@@ -538,7 +619,7 @@ async function createCampaign(chat: number, s: Session, message: string) {
       }),
     });
   } catch (e) {
-    await send(chat, `⚠️ Не получилось: ${esc(e instanceof Error ? e.message : String(e))}`);
+    await card(chat, `⚠️ Не получилось: ${esc(e instanceof Error ? e.message : String(e))}`);
     return;
   }
 
@@ -548,7 +629,7 @@ async function createCampaign(chat: number, s: Session, message: string) {
   // Force a reload so this post shows as covered next time.
   s.posts = [];
 
-  await send(
+  await card(
     chat,
     "✅ <b>Кампания создана</b>\n\n" +
       `🔑 ${esc(s.keywords.join(", "))}\n` +
@@ -557,42 +638,50 @@ async function createCampaign(chat: number, s: Session, message: string) {
       "Посмотреть и отредактировать — /list" +
       (PANEL_URL ? `\n${PANEL_URL}/campaigns` : "")
   );
+  // Leave the receipt standing: the next dialogue starts its own card instead
+  // of overwriting the record that this campaign was created.
+  s.cardId = undefined;
 }
 
 async function handleCreateStep(chat: number, s: Session, text: string) {
+  // A rejected answer redraws the same step with the reason on top, so the
+  // operator never loses sight of what was being asked.
+  const retry = (step: CreateStep, why: string) =>
+    askStep(chat, step, `⚠️ ${esc(why)}`);
+
   switch (s.step) {
     case "keywords": {
       const r = parseKeywords(text);
-      if (typeof r === "string") return void (await send(chat, r));
+      if (typeof r === "string") return void (await retry("keywords", r));
       s.keywords = r;
-      await send(chat, `✅ ${esc(r.join(", "))}`);
-      return void (await askStep(chat, "replies"));
+      return void (await askStep(chat, "replies", `✅ Слова: ${esc(r.join(", "))}`));
     }
     case "replies": {
       const r = parseReplies(text);
-      if (typeof r === "string") return void (await send(chat, r));
+      if (typeof r === "string") return void (await retry("replies", r));
       s.replies = r;
-      await send(chat, `✅ вариантов: ${r.length}`);
-      return void (await askStep(chat, "links"));
+      return void (await askStep(chat, "links", `✅ Ответов: ${r.length}`));
     }
     case "links": {
       const r = parseLinks(text);
-      if (typeof r === "string") return void (await send(chat, r));
+      if (typeof r === "string") return void (await retry("links", r));
       s.links = r;
-      await send(chat, `✅ кнопок: ${r.length}`);
-      return void (await askStep(chat, "message"));
+      return void (await askStep(chat, "message", `✅ Кнопок: ${r.length}`));
     }
     case "message": {
       const message = text.trim();
-      if (!message) return void (await send(chat, "Текст не может быть пустым."));
+      if (!message) return void (await retry("message", "Текст не может быть пустым."));
       if (message.length > MAX_MESSAGE_LEN) {
-        return void (await send(chat, `Длина ${message.length}, максимум ${MAX_MESSAGE_LEN}.`));
+        return void (await retry(
+          "message",
+          `Длина ${message.length}, максимум ${MAX_MESSAGE_LEN}.`
+        ));
       }
       s.message = message;
       return void (await showConfirm(chat, s));
     }
     default:
-      await send(chat, "Начните с /new или /list.");
+      await card(chat, "Начните с /new или /list.");
   }
 }
 
@@ -615,22 +704,22 @@ async function applyEdit(chat: number, s: Session, text: string) {
   switch (editing.field) {
     case "kw": {
       const r = parseKeywords(text);
-      if (typeof r === "string") return void (await send(chat, r));
+      if (typeof r === "string") return void (await card(chat, r));
       patch = { keywords: r };
       break;
     }
     case "msg": {
       const m = text.trim();
-      if (!m) return void (await send(chat, "Текст не может быть пустым."));
+      if (!m) return void (await card(chat, "Текст не может быть пустым."));
       if (m.length > MAX_MESSAGE_LEN) {
-        return void (await send(chat, `Длина ${m.length}, максимум ${MAX_MESSAGE_LEN}.`));
+        return void (await card(chat, `Длина ${m.length}, максимум ${MAX_MESSAGE_LEN}.`));
       }
       patch = { dmMessage: m };
       break;
     }
     case "ln": {
       const r = parseLinks(text);
-      if (typeof r === "string") return void (await send(chat, r));
+      if (typeof r === "string") return void (await card(chat, r));
       const [first, second] = r;
       patch = {
         trackedDestinationUrl: first?.url ?? "",
@@ -642,13 +731,13 @@ async function applyEdit(chat: number, s: Session, text: string) {
     }
     case "rp": {
       const r = parseReplies(text);
-      if (typeof r === "string") return void (await send(chat, r));
+      if (typeof r === "string") return void (await card(chat, r));
       patch = { publicReplyEnabled: r.length > 0, publicReplyMessages: r };
       break;
     }
     case "name": {
       const n = text.trim().slice(0, MAX_NAME_LEN);
-      if (!n) return void (await send(chat, "Название не может быть пустым."));
+      if (!n) return void (await card(chat, "Название не может быть пустым."));
       patch = { name: n };
       break;
     }
@@ -660,19 +749,20 @@ async function applyEdit(chat: number, s: Session, text: string) {
       body: JSON.stringify(patch),
     });
   } catch (e) {
-    return void (await send(chat, `⚠️ Не получилось: ${esc(e instanceof Error ? e.message : String(e))}`));
+    return void (await card(chat, `⚠️ Не получилось: ${esc(e instanceof Error ? e.message : String(e))}`));
   }
 
   s.editing = undefined;
-  await send(chat, "✅ Сохранено");
 
   const campaigns = await loadCampaigns(chat);
   const index = campaigns.findIndex((c) => c.id === editing.id);
   if (index >= 0) {
-    await send(chat, campaignCard(campaigns[index]), {
+    await card(chat, `✅ <b>Сохранено</b>\n\n${campaignCard(campaigns[index])}`, {
       reply_markup: campaignKeyboard(index, campaigns[index]),
     });
+    return;
   }
+  await card(chat, "✅ Сохранено");
 }
 
 // --- Handlers -------------------------------------------------------------
@@ -694,15 +784,18 @@ async function handleText(chat: number, text: string) {
   if (trimmed === "/list") return void (await showList(chat));
   if (trimmed === "/stats") return void (await sendDigestNow());
   if (trimmed === "/cancel") {
-    sessions.set(chat, blank());
-    return void (await send(chat, "Сброшено. /new или /list"));
+    // Keep the card through the reset so the answer rewrites the dialogue in
+    // place; blank() would drop it and leave the old one hanging unanswered.
+    const { cardId } = session(chat);
+    sessions.set(chat, { ...blank(), cardId });
+    return void (await card(chat, "Сброшено. /new или /list"));
   }
 
   const s = session(chat);
   if (s.editing) return void (await applyEdit(chat, s, text));
   if (s.step) return void (await handleCreateStep(chat, s, text));
 
-  await send(chat, "Не понял. /new — создать, /list — список.");
+  await card(chat, "Не понял. /new — создать, /list — список.");
 }
 
 async function handleCallback(
@@ -717,8 +810,14 @@ async function handleCallback(
   const [kind, a, b] = data.split(":");
 
   if (kind === "X") {
+    // The cancelled card becomes the notice, and the next dialogue opens a
+    // fresh one rather than overwriting it.
     sessions.set(chat, blank());
-    return void (await edit(chat, messageId, "✖️ Создание отменено.\n\n/new — начать заново"));
+    return void (await edit(
+      chat,
+      messageId,
+      "✖️ Создание отменено.\n\n/new — начать заново"
+    ));
   }
 
   if (kind === "B") {
@@ -731,7 +830,7 @@ async function handleCallback(
   }
 
   if (kind === "OK") {
-    if (!s.message) return void (await send(chat, "Черновик потерялся. /new"));
+    if (!s.message) return void (await card(chat, "Черновик потерялся. /new"));
     await edit(chat, messageId, draftSummary(s));
     return void (await createCampaign(chat, s, s.message));
   }
@@ -748,18 +847,18 @@ async function handleCallback(
 
   if (kind === "p") {
     const post = s.posts[Number(a)];
-    if (!post) return void (await send(chat, "Пост не найден. /new"));
+    if (!post) return void (await card(chat, "Пост не найден. /new"));
     s.post = post;
     s.keywords = [];
     s.replies = [];
     s.links = [];
     s.message = undefined;
-    await send(chat, `🎬 ${esc(shorten(post.caption, 60))}`);
+    await card(chat, `🎬 ${esc(shorten(post.caption, 60))}`);
     return void (await askStep(chat, "keywords"));
   }
 
   const campaign = s.campaigns[Number(a)];
-  if (!campaign) return void (await send(chat, "Список устарел. /list"));
+  if (!campaign) return void (await card(chat, "Список устарел. /list"));
 
   if (kind === "c") {
     return void (await edit(chat, messageId, campaignCard(campaign), {
@@ -769,7 +868,7 @@ async function handleCallback(
 
   if (kind === "e") {
     s.editing = { id: campaign.id, field: b as EditField };
-    return void (await send(chat, EDIT_PROMPT[b as EditField]));
+    return void (await card(chat, EDIT_PROMPT[b as EditField]));
   }
 
   if (kind === "t") {
@@ -779,7 +878,7 @@ async function handleCallback(
         body: JSON.stringify({ isActive: !campaign.isActive }),
       });
     } catch (e) {
-      return void (await send(chat, `⚠️ ${esc(e instanceof Error ? e.message : String(e))}`));
+      return void (await card(chat, `⚠️ ${esc(e instanceof Error ? e.message : String(e))}`));
     }
     const campaigns = await loadCampaigns(chat);
     const index = campaigns.findIndex((c) => c.id === campaign.id);
@@ -816,7 +915,7 @@ async function handleCallback(
         method: "DELETE",
       });
     } catch (e) {
-      return void (await send(chat, `⚠️ ${esc(e instanceof Error ? e.message : String(e))}`));
+      return void (await card(chat, `⚠️ ${esc(e instanceof Error ? e.message : String(e))}`));
     }
     await edit(chat, messageId, "🗑 Кампания удалена.");
     return void (await showList(chat));
@@ -831,8 +930,21 @@ const POLL_TIMEOUT_MS = 45_000;
 // The container restarts it (restart: unless-stopped) with a fresh process.
 const GIVE_UP_AFTER_MS = 5 * 60_000;
 
+// Shown by Telegram when the operator types "/". Registered on every start so
+// the list follows the code rather than whatever was set once by hand.
+const COMMANDS = [
+  { command: "new", description: "Создать кампанию" },
+  { command: "list", description: "Кампании: посмотреть и отредактировать" },
+  { command: "stats", description: "Сводка за вчера" },
+  { command: "cancel", description: "Сбросить текущий диалог" },
+];
+
 async function main() {
   console.log("[bot] запущен");
+
+  // Best effort: a bot that cannot show its menu still works, and failing to
+  // start over it would be absurd.
+  await tg("setMyCommands", { commands: COMMANDS }, true).catch(() => {});
   // Health alerts and the morning digest share this process.
   startMonitor();
   let offset = 0;
@@ -849,7 +961,12 @@ async function main() {
         ok: boolean;
         result?: {
           update_id: number;
-          message?: { chat: { id: number }; from?: { id: number }; text?: string };
+          message?: {
+            chat: { id: number };
+            message_id: number;
+            from?: { id: number };
+            text?: string;
+          };
           callback_query?: {
             id: string;
             data?: string;
@@ -884,6 +1001,9 @@ async function main() {
             );
           } else if (u.message?.text) {
             await handleText(u.message.chat.id, u.message.text);
+            // Only once it has been acted on: a failure leaves what was typed
+            // in the chat, which is the one copy of it that exists.
+            await dropMessage(u.message.chat.id, u.message.message_id);
           }
         } catch (e) {
           // One bad update must not kill the polling loop — but it must not
