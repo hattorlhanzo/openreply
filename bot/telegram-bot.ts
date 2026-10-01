@@ -838,15 +838,28 @@ async function handleCallback(
   }
 }
 
+// Telegram holds a long poll open for 30s, so anything past 45 is a socket
+// that is never coming back.
+const POLL_TIMEOUT_MS = 45_000;
+
+// How long the bot may fail to reach Telegram before it gives up and exits.
+// The container restarts it (restart: unless-stopped) with a fresh process.
+const GIVE_UP_AFTER_MS = 5 * 60_000;
+
 async function main() {
   console.log("[bot] запущен");
   // Health alerts and the morning digest share this process.
   startMonitor();
   let offset = 0;
+  // When the current run of consecutive failures started, or null when healthy.
+  let failingSince: number | null = null;
 
   for (;;) {
     try {
-      const r = await fetch(`${TG}/getUpdates?timeout=30&offset=${offset}`);
+      const r = await fetch(`${TG}/getUpdates?timeout=30&offset=${offset}`, {
+        signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+      });
+      failingSince = null;
       const j = (await r.json()) as {
         ok: boolean;
         result?: {
@@ -861,6 +874,10 @@ async function main() {
         }[];
       };
       if (!j.ok) {
+        // Telegram answered and refused. The one that matters is 409 Conflict,
+        // which means a second process is polling the same token and the two
+        // are stealing each other's updates — silence here would hide that.
+        console.error("[bot] getUpdates:", JSON.stringify(j).slice(0, 200));
         await new Promise((res) => setTimeout(res, 5000));
         continue;
       }
@@ -894,7 +911,24 @@ async function main() {
         }
       }
     } catch (e) {
-      console.error("[bot]", e instanceof Error ? e.message : e);
+      // Retrying forever in-process is what let this bot spend two weeks
+      // logging "fetch failed" while the host could reach Telegram perfectly
+      // well: the connection pool had gone bad and nothing ever rebuilt it.
+      // A process that cannot do its one job for five minutes should die and
+      // be restarted clean rather than pretend to run.
+      failingSince ??= Date.now();
+      const stuckForMs = Date.now() - failingSince;
+      console.error(
+        `[bot] опрос Telegram: ${describeFetchError(e)} (${Math.round(stuckForMs / 1000)} с подряд)`
+      );
+
+      if (stuckForMs >= GIVE_UP_AFTER_MS) {
+        console.error(
+          "[bot] Telegram недоступен 5 минут — выхожу, контейнер перезапустит с чистым состоянием"
+        );
+        process.exit(1);
+      }
+
       await new Promise((res) => setTimeout(res, 5000));
     }
   }
