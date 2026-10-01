@@ -114,7 +114,33 @@ const SERVICE_LINK = {
   label: "Оставить заявку",
 };
 
-const SERVICE_DM = "Добрый день! Как и обещали, прикладываем ссылку: {link}";
+/**
+ * The price list, sent as the DM itself rather than linked to: the whole point
+ * of the campaign is that someone asking "сколько стоит" gets the numbers
+ * without another tap.
+ *
+ * `{link}` sits at the end and is stripped when the link goes out as a button,
+ * which is the normal case — the sentence has to read correctly without it,
+ * and does, because the button lands directly under the message.
+ */
+const SERVICE_DM = [
+  "Добрый день, {username}!",
+  "Стоимость оклейки антигравийной плёнкой:",
+  "",
+  "• MacBook:",
+  "— верхняя крышка — 3 000 ₽",
+  "— нижняя панель — 3 000 ₽",
+  "— зона вокруг клавиатуры (палмрест) — 3 000 ₽",
+  "— экран (антибликовая защитная плёнка) — 2 500 ₽",
+  "",
+  "• Смартфон:",
+  "Оклейка антигравийной плёнкой со швом — 3 000 ₽",
+  "Оклейка виниловой плёнкой — 5 000 ₽",
+  "",
+  "Если хотите выполнить услугу по Москве, то необходимо заранее оставить заявку по данной ссылке:",
+  "",
+  "Менеджер свяжется с Вами, и подберёт удобное время для встречи {link}",
+].join("\n");
 
 // Fresh arrays and a fresh object each time: the session mutates what it is
 // handed — the edit flow replaces links in place — and a shared constant would

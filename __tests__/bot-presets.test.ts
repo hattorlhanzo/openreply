@@ -9,6 +9,7 @@ import {
   serviceReplies,
 } from "../bot/presets";
 import { matchKeywords } from "../lib/utils/keyword-matcher";
+import { renderMessageWithoutLink } from "../lib/tracking/message";
 
 describe("product preset", () => {
   it("appends the brand after the fixed intent words", () => {
@@ -118,7 +119,33 @@ describe("service preset", () => {
     expect(serviceKeywords()).not.toBe(serviceKeywords());
   });
 
-  it("keeps the {link} token the worker substitutes", () => {
+  it("keeps both tokens the worker substitutes", () => {
+    expect(serviceDm()).toContain("{username}");
     expect(serviceDm()).toContain("{link}");
+  });
+
+  it("quotes every price, since the DM is the answer to «сколько стоит»", () => {
+    const dm = serviceDm();
+
+    for (const price of ["3 000 ₽", "2 500 ₽", "5 000 ₽"]) {
+      expect(dm).toContain(price);
+    }
+  });
+
+  it("fits in one Instagram message", () => {
+    // 1000 is the cap the bot enforces on a hand-typed DM; a preset that
+    // quietly exceeded it would fail only at send time.
+    expect(serviceDm().length).toBeLessThanOrEqual(1000);
+  });
+
+  it("still ends in a sentence once the button takes the link away", () => {
+    const sent = renderMessageWithoutLink({
+      message: serviceDm(),
+      commenterName: "ivan",
+    });
+
+    expect(sent).toContain("Добрый день, ivan!");
+    expect(sent).not.toContain("{link}");
+    expect(sent.endsWith("удобное время для встречи")).toBe(true);
   });
 });
