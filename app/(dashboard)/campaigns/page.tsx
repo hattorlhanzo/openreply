@@ -327,7 +327,7 @@ export default function CampaignsPage() {
                 key={label(s)}
                 type="button"
                 onClick={() => setStatusFilter(s)}
-                className={`rounded-md px-3 py-1.5 text-sm capitalize transition-colors ${
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                   statusFilter === s
                     ? "bg-background font-medium text-foreground ring-1 ring-accent/40"
                     : "text-muted hover:text-foreground"

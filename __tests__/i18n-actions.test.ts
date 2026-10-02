@@ -24,6 +24,31 @@ describe("language preference", () => {
     expect((await getI18n()).locale).toBe("en");
   });
 
+  it("renders Russian from the saved cookie", async () => {
+    store.get.mockReturnValue({ value: "ru" });
+    const { locale, t } = await getI18n();
+    expect(locale).toBe("ru");
+    expect(t("Settings")).toBe("Настройки");
+  });
+
+  it("opens in the deployment's default language when nothing is saved", async () => {
+    vi.stubEnv("DEFAULT_LOCALE", "ru");
+    store.get.mockReturnValue(undefined);
+    expect((await getI18n()).locale).toBe("ru");
+  });
+
+  it("lets a saved choice override the deployment default", async () => {
+    vi.stubEnv("DEFAULT_LOCALE", "ru");
+    store.get.mockReturnValue({ value: "en" });
+    expect((await getI18n()).locale).toBe("en");
+  });
+
+  it("ignores an unsupported deployment default", async () => {
+    vi.stubEnv("DEFAULT_LOCALE", "de");
+    store.get.mockReturnValue(undefined);
+    expect((await getI18n()).locale).toBe("en");
+  });
+
   it("persists only the language cookie, across routes and browser restarts", async () => {
     vi.stubEnv("NODE_ENV", "production");
     await setLocale("zh-TW");

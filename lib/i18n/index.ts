@@ -1,15 +1,39 @@
+import ru from "./ru.json";
 import zhTW from "./zh-TW.json";
 
 export const LOCALE_COOKIE = "openreply-locale";
-export type Locale = "en" | "zh-TW";
+export type Locale = "en" | "zh-TW" | "ru";
 export type MessageKey = keyof typeof zhTW;
 
+// Every catalog carries exactly the zh-TW keys: a key missing here is a type
+// error, not an English string leaking into a translated page.
+const catalogs: Record<Exclude<Locale, "en">, Record<MessageKey, string>> = {
+  "zh-TW": zhTW,
+  ru: ru satisfies Record<MessageKey, string>,
+};
+
 export function isLocale(value: unknown): value is Locale {
-  return value === "en" || value === "zh-TW";
+  return value === "en" || value === "zh-TW" || value === "ru";
 }
 
-export function resolveLocale(value: unknown): Locale {
-  return isLocale(value) ? value : "en";
+/**
+ * `fallback` is what a visitor with no saved choice gets. English unless the
+ * deployment says otherwise — see DEFAULT_LOCALE in lib/i18n/server.ts.
+ */
+export function resolveLocale(value: unknown, fallback: Locale = "en"): Locale {
+  return isLocale(value) ? value : fallback;
+}
+
+// The order plural forms are written in: `{count|пост|поста|постов}` is
+// one|few|many. Languages with fewer categories simply use fewer forms.
+const PLURAL_ORDER: Intl.LDMLPluralRule[] = ["one", "few", "many", "other"];
+
+function pluralForm(rules: Intl.PluralRules, forms: string[], value: unknown) {
+  // Counts sometimes arrive pre-formatted ("1 234"), so drop group separators
+  // before reading the number back.
+  const n = Number(String(value).replace(/[\s,]/g, ""));
+  const index = PLURAL_ORDER.indexOf(rules.select(Number.isFinite(n) ? n : 0));
+  return forms[Math.min(index, forms.length - 1)];
 }
 
 type Placeholders<S extends string> =
@@ -52,11 +76,24 @@ const labels: Record<string, StaticMessageKey> = {
 };
 
 export function createI18n(locale: Locale) {
+  const rules = new Intl.PluralRules(locale);
+
   function t<K extends MessageKey>(key: K, ...args: MessageArgs<K>): string {
-    const message = locale === "zh-TW" ? zhTW[key] : key;
+    const message = locale === "en" ? key : catalogs[locale][key];
     const values = args[0] as Record<string, string | number> | undefined;
-    return message.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-      values?.[name] === undefined ? placeholder : String(values[name]),
+    // One pass over the template, so a value that itself contains braces is
+    // inserted verbatim and never read as another placeholder. `{name|a|b|c}`
+    // picks a plural form by the value of `name` — Russian needs three where
+    // English gets by with a singular key and a plural key.
+    return message.replace(
+      /\{(\w+)(?:\|([^{}]*))?\}/g,
+      (placeholder, name: string, forms: string | undefined) => {
+        const value = values?.[name];
+        if (value === undefined) return placeholder;
+        return forms === undefined
+          ? String(value)
+          : pluralForm(rules, forms.split("|"), value);
+      },
     );
   }
 

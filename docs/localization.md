@@ -1,7 +1,9 @@
 # Interface languages
 
-OpenReply defaults to English. Choose **English** or **繁體中文** in the dashboard
-sidebar, under **Settings → Interface language**, or on the sign-in screen.
+OpenReply defaults to English. Choose **English**, **繁體中文** or **Русский** in
+the dashboard sidebar, under **Settings → Interface language**, or on the
+sign-in screen. A deployment can open in another language for visitors who have
+not chosen one by setting `DEFAULT_LOCALE` (`en`, `ru` or `zh-TW`).
 The choice is stored in a browser cookie for one year and applies to the
 dashboard, sign-in screens, workspace invitations, and shared campaign reports.
 
@@ -16,8 +18,14 @@ interface translation's scope.
 
 ## Adding or changing copy
 
-- `lib/i18n/zh-TW.json` maps English source copy to Traditional Chinese. Use
+- `lib/i18n/zh-TW.json` maps English source copy to Traditional Chinese, and
+  `lib/i18n/ru.json` to Russian; both carry exactly the same keys. Use
   complete sentences with named placeholders when word order can vary.
+- Russian nouns agree with numbers in three forms, which a singular key and a
+  plural key cannot express. Write them as `{count|пост|поста|постов}`
+  (one|few|many); the form is picked from the value of `count` with
+  `Intl.PluralRules`. Copy where the number sits outside `t()` uses wording
+  that reads correctly with any number ("отправлено", "с ошибкой").
 - Client components use `useI18n()`; server components use `await getI18n()`.
   `t("Hello, {name}!", { name })` checks both the message key and required
   placeholders at compile time. Never pass user content as a translation key.
