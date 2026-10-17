@@ -251,37 +251,14 @@ export default function CampaignsPage() {
     }
   }
 
-  async function duplicateAutomation(auto: Campaign) {
+  // Копию собирает сервер из сохранённой кампании, поэтому переезжают и те
+  // настройки, которых этот список не загружает (триггер на директ, дожим,
+  // подпись кнопки, фотографии).
+  async function duplicateAutomation(id: string) {
     setMenuOpenId(null);
-    const specific = !auto.matchAnyPost && !auto.pendingNextReel;
     try {
-      const res = await fetch("/api/automations", {
+      const res = await fetch(`/api/automations/duplicate?id=${id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `${auto.name} (копия)`,
-          instagramAccountId: auto.instagramAccountId,
-          postId: specific ? auto.postId : null,
-          postUrl: specific ? auto.postUrl : null,
-          matchAnyPost: auto.matchAnyPost,
-          pendingNextReel: auto.pendingNextReel,
-          matchAnyWord: auto.matchAnyWord,
-          keywords: auto.keywords,
-          dmMessage: auto.dmMessage,
-          openingDmEnabled: auto.openingDmEnabled,
-          openingDmMessage: auto.openingDmMessage,
-          openingDmButtonLabel: auto.openingDmButtonLabel,
-          publicReplyEnabled: auto.publicReplyEnabled,
-          publicReplyMessages: auto.publicReplyMessages,
-          trackedDestinationUrl: auto.trackedLinks[0]?.destinationUrl ?? "",
-          secondaryDestinationUrl: auto.trackedLinks[1]?.destinationUrl ?? "",
-          secondaryButtonLabel: auto.trackedLinks[1]?.label ?? "Открыть ссылку",
-          requireFollow: auto.requireFollow,
-          followPromptMessage: auto.followPromptMessage,
-          followPromptButtonLabel: auto.followPromptButtonLabel,
-          wholeWordMatch: auto.wholeWordMatch,
-          isActive: false,
-        }),
       });
       const data = await res.json();
       if (data.success) void fetchAutomations();
@@ -646,7 +623,7 @@ export default function CampaignsPage() {
                       >
                         <button
                           type="button"
-                          onClick={() => void duplicateAutomation(auto)}
+                          onClick={() => void duplicateAutomation(auto.id)}
                           className="block w-full rounded-[7px] px-3 py-2 text-left text-[13px] text-foreground hover:bg-surface-hover"
                         >
                           Дублировать

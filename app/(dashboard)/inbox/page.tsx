@@ -69,6 +69,7 @@ export default function InboxPage() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const conversationRequests = useRef(new Set<string>());
   // Counter for optimistic message ids (a ref, not Date.now(): the React
   // compiler lint forbids impure calls inside component scope).
   const optimisticSeq = useRef(0);
@@ -105,7 +106,8 @@ export default function InboxPage() {
 
   const loadConversations = useCallback(
     async (silent: boolean) => {
-      if (!selectedAccountId) return;
+      if (!selectedAccountId || conversationRequests.current.has(selectedAccountId)) return;
+      conversationRequests.current.add(selectedAccountId);
       if (!silent) setConvLoading(true);
       try {
         const res = await fetch(
@@ -123,6 +125,7 @@ export default function InboxPage() {
       } catch {
         if (!silent) setConvError(API_ERRORS.failedToLoadConversations);
       } finally {
+        conversationRequests.current.delete(selectedAccountId);
         if (!silent) setConvLoading(false);
       }
     },
@@ -180,7 +183,7 @@ export default function InboxPage() {
   // Load + poll the open thread. Cached messages render instantly while a fresh
   // copy loads silently; opening a thread never shows a blank pane on revisit.
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || active?.detailsUnavailable) return;
     const cached = readCache<ThreadMessage[]>(
       msgCacheKey(activeId),
       CACHE_MAX_AGE_MS
@@ -200,7 +203,7 @@ export default function InboxPage() {
       POLL_MS
     );
     return () => window.clearInterval(timer);
-  }, [activeId, loadMessages]);
+  }, [activeId, active?.detailsUnavailable, loadMessages]);
 
   // Keep the thread pinned to the latest message.
   useEffect(() => {
@@ -368,12 +371,17 @@ export default function InboxPage() {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-[14px] font-semibold text-foreground">
-                          @{c.contact.username ?? "неизвестно"}
+                          {c.detailsUnavailable ? "Переписка недоступна" : `@${c.contact.username ?? "неизвестно"}`}
                         </span>
                         <span className="shrink-0 text-[11px] text-muted tabular-nums">
                           {formatTime(c.updatedTime)}
                         </span>
                       </span>
+                      {c.detailsUnavailable && (
+                        <span className="mt-0.5 block truncate text-[13px] text-muted">
+                          Instagram не отдал эту переписку
+                        </span>
+                      )}
                       {c.lastMessage && (
                         <span className="mt-0.5 block truncate text-[13px] text-muted">
                           {c.lastMessage.fromMe ? "Вы: " : ""}
@@ -422,12 +430,16 @@ export default function InboxPage() {
                   {initialOf(active.contact.username)}
                 </span>
                 <span className="truncate text-[14px] font-semibold text-foreground">
-                  @{active.contact.username ?? "неизвестно"}
+                  {active.detailsUnavailable ? "Переписка недоступна" : `@${active.contact.username ?? "неизвестно"}`}
                 </span>
               </div>
 
               <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-                {threadLoading && messages.length === 0 ? (
+                {active.detailsUnavailable ? (
+                  <p role="status" className="text-sm text-muted">
+                    Instagram не отдал подробности этой переписки. Остальные переписки доступны, этот чат можно открыть в самом Instagram.
+                  </p>
+                ) : threadLoading && messages.length === 0 ? (
                   <div className="space-y-3">
                     <span className="skeleton block h-10 w-2/5" />
                     <span className="skeleton ml-auto block h-10 w-1/3" />
@@ -476,6 +488,7 @@ export default function InboxPage() {
                 )}
                 <div className="flex items-end gap-2">
                   <textarea
+                    disabled={active.detailsUnavailable || !active.contact.id}
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -486,7 +499,7 @@ export default function InboxPage() {
                   <button
                     type="button"
                     onClick={() => void handleSend()}
-                    disabled={sending || !draft.trim()}
+                    disabled={sending || !draft.trim() || !active.contact.id || active.detailsUnavailable}
                     className="btn btn-primary"
                   >
                     <IconSend size={16} />

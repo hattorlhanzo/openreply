@@ -72,6 +72,7 @@ interface LoadedCampaign {
   matchAnyPost: boolean;
   keywords: string[];
   matchAnyWord: boolean;
+  wholeWordMatch?: boolean;
   dmTriggerEnabled: boolean;
   dmMessage: string;
   dmImages?: string[];
@@ -236,6 +237,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
 
   const [matchMode, setMatchMode] = useState<MatchMode>("specific");
   const [keywordText, setKeywordText] = useState("");
+  const [wholeWordMatch, setWholeWordMatch] = useState(true);
   const [dmTriggerEnabled, setDmTriggerEnabled] = useState(false);
 
   const [publicReplyEnabled, setPublicReplyEnabled] = useState(false);
@@ -349,6 +351,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setPostUrl(c.postUrl);
         setMatchMode(c.matchAnyWord ? "any" : "specific");
         setKeywordText(c.keywords.join(", "));
+        setWholeWordMatch(c.wholeWordMatch ?? true);
         setDmTriggerEnabled(c.dmTriggerEnabled ?? false);
         setPublicReplyEnabled(c.publicReplyEnabled);
         setPublicReplyMessages(
@@ -607,6 +610,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       pendingNextReel: triggerScope === "next",
       matchAnyWord: matchMode === "any",
       keywords: matchMode === "any" ? [] : keywords,
+      wholeWordMatch,
       dmTriggerEnabled,
       dmMessage,
       dmImages: PHOTOS_ENABLED ? dmImages : [],
@@ -976,6 +980,19 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   </div>
                 ) : (
                   <p className="hint">Разделяйте слова запятыми</p>
+                )}
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-[10px] border border-border px-3 py-2.5">
+                  <span className="text-[14px] text-foreground">Искать по части слова</span>
+                  <Toggle
+                    on={!wholeWordMatch}
+                    onToggle={() => setWholeWordMatch(!wholeWordMatch)}
+                    label="Искать по части слова"
+                  />
+                </div>
+                {!wholeWordMatch && (
+                  <p className="hint">
+                    Сработает, даже если слово — часть другого: ключ «цен» найдётся в «цена», «цену» и «ценах».
+                  </p>
                 )}
               </div>
             )}
